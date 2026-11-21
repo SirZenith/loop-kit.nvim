@@ -81,6 +81,7 @@
         "#4"
       ],
       "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
+      "hash": "9388fdff8eb62f00a58b1807377863bccd250db4",
       "flow": "quick",
       "branch": "pi-wt/loop-6-1451d443",
       "baseSha": "a937c8063f53fa4b82797c94425d13320ad58460",
