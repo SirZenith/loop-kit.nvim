@@ -12,11 +12,44 @@
                 "command": [
                     "nvim --headless -u tests/minimal_init.lua -l tests/run.lua*",
                     "nvim --version",
-                    "git diff --check*"
+                    "git diff --check*",
+                    "head*",
+                    "tail*"
                 ]
             },
             "action": "allow",
             "reason": "project test commands"
+        },
+        {
+            "match": {
+                "tool": [
+                    "bash",
+                    "run_in_background",
+                    "powershell",
+                    "run_in_background_powershell"
+                ],
+                "command": [
+                    "loop-cli show*",
+                    "loop-cli list*",
+                    "loop-cli paths*",
+                    "loop-cli validate*",
+                    "loop-cli decide*",
+                    "loop-cli --version",
+                    "loop-cli --json show*",
+                    "loop-cli --json list*",
+                    "loop-cli --json paths*",
+                    "loop-cli --json validate*",
+                    "loop-cli --json decide*",
+                    "loop-cli --no-sync list*",
+                    "loop-cli --no-sync decide*",
+                    "loop-cli --json --no-sync list*",
+                    "loop-cli --json --no-sync decide*",
+                    "loop-cli --no-sync --json list*",
+                    "loop-cli --no-sync --json decide*"
+                ]
+            },
+            "action": "allow",
+            "reason": "LOOP read-only queries"
         }
     ]
 }
