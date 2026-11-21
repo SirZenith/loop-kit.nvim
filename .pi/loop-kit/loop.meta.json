@@ -105,6 +105,8 @@
       ],
       "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
       "flow": "quick",
+      "branch": "pi-wt/loop-7-bd2e6db9",
+      "baseSha": "9e2da3c81b0a533aa03f33e015aecc88d1d5fab2",
       "touch": [
         "lua/loop-kit/ui/**",
         "tests/render/board_spec.lua",
