@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "tasks": {
+    "#1": {
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
+      "flow": "doc-to-tasks"
+    }
+  }
+}
