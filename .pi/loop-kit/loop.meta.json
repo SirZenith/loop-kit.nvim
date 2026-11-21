@@ -10,8 +10,8 @@
     "#2": {
       "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
       "flow": "quick",
-      "branch": "pi-wt/loop-2-f2bf5ef5",
-      "baseSha": "77637427bdcf8a181d387ee545e3b5e669dbea55",
+      "branch": "pi-wt/loop-2-7c65ad7c",
+      "baseSha": "f3af8329091b4e7a76651ad41fcd02d8ff96df30",
       "touch": [
         "lua/loop-kit/config.lua",
         "lua/loop-kit/util.lua",
