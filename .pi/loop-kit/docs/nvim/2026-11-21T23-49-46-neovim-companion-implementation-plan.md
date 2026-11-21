@@ -3,7 +3,7 @@ task_id: "#1"
 summary: "loop-kit.nvim 的完整实现计划：零依赖 tab 双栏看板、CLI 驱动的本地与远端任务读写、表单编辑、进阶字段与可拆分验收边界。"
 module: nvim
 tag: docs
-status: spec
+status: archived
 updated: 2026-11-21T23:49:46+08:00
 verification_levels:
   - unit
