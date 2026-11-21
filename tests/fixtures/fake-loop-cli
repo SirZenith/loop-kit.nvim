@@ -1,0 +1,103 @@
+#!/bin/sh
+# Programmable loop-cli double used by tests. It never touches the network.
+#
+# Environment:
+#   FAKE_CLI_STATE  (required) directory where calls and scenarios live.
+#
+# For call N it records:
+#   $FAKE_CLI_STATE/argv.N    NUL-separated argv (exact bytes)
+#   $FAKE_CLI_STATE/stdin.N   stdin bytes
+#   $FAKE_CLI_STATE/cwd.N     working directory
+#
+# The subcommand is the first non-flag argument (the value after
+# --project-root/--file is skipped). Responses come from:
+#   $FAKE_CLI_STATE/out.<cmd>   stdout
+#   $FAKE_CLI_STATE/err.<cmd>   stderr
+#   $FAKE_CLI_STATE/exit.<cmd>  exit status
+# and fall back to out.default / err.default / exit.default.
+set -u
+
+: "${FAKE_CLI_STATE:?FAKE_CLI_STATE must be set}"
+
+state="$FAKE_CLI_STATE"
+mkdir -p "$state"
+
+# Serialise the sequence counter with mkdir (portable, no flock).
+lock="$state/.lock"
+tries=0
+while ! mkdir "$lock" 2>/dev/null; do
+  tries=$((tries + 1))
+  if [ "$tries" -gt 500 ]; then
+    break
+  fi
+  sleep 0.01 2>/dev/null || true
+done
+
+seq=0
+if [ -f "$state/counter" ]; then
+  seq=$(cat "$state/counter" 2>/dev/null || echo 0)
+fi
+seq=$((seq + 1))
+printf '%s\n' "$seq" > "$state/counter"
+rmdir "$lock" 2>/dev/null || true
+
+# Record argv as NUL-terminated bytes, including $0 so tests can assert the executable.
+: > "$state/argv.$seq"
+printf '%s\0' "$0" >> "$state/argv.$seq"
+for arg in "$@"; do
+  printf '%s\0' "$arg" >> "$state/argv.$seq"
+done
+pwd > "$state/cwd.$seq"
+cat > "$state/stdin.$seq"
+
+cmd=""
+prev=""
+for arg in "$@"; do
+  case "$prev" in
+    --project-root|--file|--status|--target)
+      prev=""
+      continue
+      ;;
+  esac
+  case "$arg" in
+    --project-root|--file|--status|--target)
+      prev="$arg"
+      continue
+      ;;
+    -*)
+      continue
+      ;;
+    *)
+      cmd="$arg"
+      break
+      ;;
+  esac
+done
+
+read_file() {
+  if [ -f "$1" ]; then
+    cat "$1"
+  fi
+}
+
+out="$state/out.default"
+err="$state/err.default"
+code_file="$state/exit.default"
+if [ -n "$cmd" ] && [ -f "$state/out.$cmd" ]; then
+  out="$state/out.$cmd"
+fi
+if [ -n "$cmd" ] && [ -f "$state/err.$cmd" ]; then
+  err="$state/err.$cmd"
+fi
+if [ -n "$cmd" ] && [ -f "$state/exit.$cmd" ]; then
+  code_file="$state/exit.$cmd"
+fi
+
+read_file "$out"
+read_file "$err" >&2
+
+code=0
+if [ -f "$code_file" ]; then
+  code=$(cat "$code_file")
+fi
+exit "$code"
