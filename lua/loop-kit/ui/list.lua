@@ -43,6 +43,7 @@ function M.new(opts)
   self.buf = opts.buf or vim.api.nvim_create_buf(false, true)
   self.win = opts.win
   self.icons = opts.icons
+  self.sort = opts.sort
   self.on_select = opts.on_select
   self.hint = nil
   self.rendered = nil
@@ -120,6 +121,7 @@ function List:draw(opts)
   local rendered = render.list(self.state:groups(), {
     icons = self.icons,
     selected_id = self.state:selected_id(),
+    sort = self.sort,
   })
   if self.hint and self.hint ~= "" then
     table.insert(rendered.lines, 1, "")

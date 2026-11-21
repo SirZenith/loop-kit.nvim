@@ -2,8 +2,8 @@
 --
 --   nvim --headless -u tests/minimal_init.lua -l tests/run.lua [-- --filter unit]
 --
--- Filters: unit / fake-dom / render. Without a filter all three groups run
--- (render may be empty until the UI task lands).
+-- Filters: unit / fake-dom / render / integration. Without a filter every
+-- group runs.
 local paths = require("helpers.paths")
 local t = require("helpers.t")
 local tmp = require("helpers.tmp")
@@ -33,9 +33,10 @@ local groups = {
   ["unit"] = "tests/unit",
   ["fake-dom"] = "tests/fake-dom",
   ["render"] = "tests/render",
+  ["integration"] = "tests/integration",
 }
 
-local order = { "unit", "fake-dom", "render" }
+local order = { "unit", "fake-dom", "render", "integration" }
 
 local function spec_files(dir)
   local files = {}

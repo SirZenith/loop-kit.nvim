@@ -99,9 +99,11 @@ function M.list(groups, opts)
     for _, task in ipairs(group.tasks or {}) do
       tasks[#tasks + 1] = task
     end
-    table.sort(tasks, function(a, b)
-      return util.compare_ids(a.id, b.id) < 0
-    end)
+    if opts.sort ~= "title" then
+      table.sort(tasks, function(a, b)
+        return util.compare_ids(a.id, b.id) < 0
+      end)
+    end
 
     if #tasks > 0 then
       if #out.lines > 0 then
