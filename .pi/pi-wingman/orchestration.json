@@ -1,0 +1,107 @@
+{
+    "agents": {
+        "loop-kit/loop-verifier": {
+            "permissions": [
+                {
+                    "match": {
+                        "toolClass": "shell",
+                        "command": [
+                            "git push*",
+                            "git remote*",
+                            "git commit*",
+                            "git add*",
+                            "git checkout*",
+                            "git switch*",
+                            "git restore*",
+                            "git stash*",
+                            "git reset*",
+                            "git clean*",
+                            "*rm -rf*"
+                        ]
+                    },
+                    "action": "deny",
+                    "reason": "验收不改代码、不提交、不动工作区"
+                },
+                {
+                    "match": {
+                        "toolClass": "shell",
+                        "risk": "CRITICAL"
+                    },
+                    "action": "deny",
+                    "reason": "拒绝高危命令"
+                },
+                {
+                    "match": {
+                        "toolClass": "shell",
+                        "command": [
+                            "nvim --version",
+                            "nvim --headless -u tests/minimal_init.lua -l tests/run.lua*"
+                        ]
+                    },
+                    "action": "allow",
+                    "reason": "Neovim 插件验收：运行 headless 测试与版本探测"
+                },
+                {
+                    "match": {
+                        "mutates": true
+                    },
+                    "action": "deny",
+                    "reason": "只读 profile：不写文件"
+                },
+                {
+                    "match": {
+                        "toolClass": "shell",
+                        "mutates": false,
+                        "command": [
+                            "cargo test*",
+                            "cargo nextest*",
+                            "npm test*",
+                            "npm run test*",
+                            "pnpm test*",
+                            "yarn test*",
+                            "node --test*",
+                            "npx vitest*",
+                            "npx jest*",
+                            "vitest*",
+                            "tsc --noEmit*",
+                            "npx tsc --noEmit*",
+                            "tsc -p*",
+                            "npx tsc -p*",
+                            "npm run typecheck*",
+                            "pnpm run typecheck*",
+                            "yarn typecheck*",
+                            "loop-cli show*",
+                            "loop-cli paths*",
+                            "loop-cli list*",
+                            "loop-cli validate*",
+                            "git status*",
+                            "git diff*",
+                            "git log*",
+                            "git show*",
+                            "git ls-files*",
+                            "git rev-parse*"
+                        ]
+                    },
+                    "action": "allow",
+                    "reason": "验收允许跑测试、类型检查与只读查询"
+                },
+                {
+                    "match": {
+                        "toolClass": "shell",
+                        "mutates": false,
+                        "risk": "SAFE"
+                    },
+                    "action": "allow",
+                    "reason": "只读 shell 直接放行"
+                },
+                {
+                    "match": {
+                        "toolClass": "shell"
+                    },
+                    "action": "deny",
+                    "reason": "其余 shell 命令与验收无关"
+                }
+            ]
+        }
+    }
+}
