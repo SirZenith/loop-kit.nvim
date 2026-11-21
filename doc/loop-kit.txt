@@ -1,0 +1,269 @@
+*loop-kit.txt*  Neovim LOOP task board
+*loop-kit*      *loopkit*
+
+loop-kit.nvim                                                          *loop-kit.nvim*
+
+在 Neovim 内浏览与操作 LOOP 任务的零依赖看板。左窗为任务列表，右窗为只读
+Markdown 详情；所有读写都通过 `loop-cli`，插件不直接读写 LOOP JSON。
+
+==============================================================================
+1. 要求                                                          *loop-kit-require*
+
+  Neovim         0.10 或更新版本
+  loop-cli       0.1.0 或更新版本（需要 remove 子命令）
+  项目根目录     有可读的 loop.config.json（version 为 1，loopRoot 非空）
+
+CLI 查找顺序：setup.cli_path -> $LOOP_BIN -> 配置 cliPath -> PATH 中的
+loop-cli。配置里的相对 cliPath 相对配置文件目录解析。
+
+项目根解析顺序：命令显式路径 -> setup.project_root -> 当前文件向上查找
+loop.config.json -> 当前工作目录向上查找 -> $LOOP_PROJECT_ROOT -> 当前目录。
+最终路径以 loop-cli paths 的返回值为准。
+
+==============================================================================
+2. 安装                                                          *loop-kit-install*
+
+lazy.nvim: >
+  {
+    "https://git.dispersion.cc/Dispersion/loop-kit.nvim.git",
+    cmd = "LoopKit",
+    config = function() require("loop-kit").setup() end,
+  }
+<
+vim.pack（Neovim 0.12+）: >
+  vim.pack.add({ "https://git.dispersion.cc/Dispersion/loop-kit.nvim.git" })
+  require("loop-kit").setup()
+<
+Neovim 0.10/0.11 请使用 lazy.nvim 或 vim-plug。
+plugin/loop-kit.lua 只注册 :LoopKit，不加载看板。setup() 可省略，省略时使用
+默认值。仓库不自带 colorscheme。
+
+==============================================================================
+3. 命令                                                          *loop-kit-commands*
+
+:LoopKit [open] [path]   打开或聚焦当前项目的看板；同一项目不重复建 tab。
+:LoopKit show {id}       打开看板，选中任务并聚焦详情窗。
+:LoopKit edit {id}       打开该任务的编辑表单。
+:LoopKit add             打开新增任务表单。
+:LoopKit sync            完整执行 loop-cli list（远端源会访问网络）。
+:LoopKit refresh         只读取缓存/本地状态，不联网。
+:LoopKit remove {id}     确认后删除 local 任务或把远端任务移出循环。
+:LoopKit decide          请求 decide 推荐；有 next id 时选中，否则显示原因。
+:LoopKit paths           只读显示 loop-cli paths 的权威路径。
+:LoopKit health          在分屏里显示 :checkhealth loop-kit 的结果。
+:LoopKit close           关闭当前看板 tab。
+
+子命令名大小写不敏感。
+
+==============================================================================
+4. 键位                                                            *loop-kit-keys*
+
+j k、<Down> 或 <Up>      上下移动
+<CR>                    聚焦当前任务的详情窗
+/                       关键字筛选（匹配 id/title/tag/desc，大小写不敏感）
+<Esc>                   清除关键字
+s / S                   循环状态筛选 / 直接显示全部
+r / R                   读取缓存（--no-sync） / 完整同步
+c                       认领（claim）
+d                       完成（done，受依赖门禁约束）
+D                       确认后强制完成（显式追加 --force）
+b                       输入非空原因并 block
+e / a                   编辑当前任务 / 新增任务
+x                       删除或移出当前任务（始终先确认）
+o                       用 :edit 打开任务的 doc（相对项目根解析）
+F / P / T / M           flow / private / touch / worktree meta
+n                       decide 推荐
+?                       打开/关闭帮助浮窗
+q                       关闭看板 tab
+
+默认筛选 open（pending/doing/blocked），分组顺序 doing -> pending -> blocked
+-> done，组内按数字 id 升序。详情窗里也可使用 q、?、o、e。
+
+所有键位可用 setup({ keys = ... }) 覆盖或设为 false 禁用；动作名与上表行为
+同名，例如 move_up、move_down、open_detail、filter_prompt、clear_query、cycle_filter、
+filter_all、refresh、sync、claim、done、force_done、block、edit、add、remove、
+open_doc、flow、private、touch、meta、decide、help、close。插件不写全局键位。
+
+==============================================================================
+5. 配置                                                          *loop-kit-setup*
+
+>lua
+  require("loop-kit").setup({
+    cli_path = nil,          -- 覆盖 loop-cli 路径
+    project_root = nil,      -- 覆盖项目根
+    auto_sync = true,        -- 打开/刷新时后台完整同步（仅远端访问网络）
+    list_width = 38,         -- 左窗宽度
+    default_filter = "open", -- open/all/pending/doing/blocked/done
+    sort = "status",         -- "status"（组内按 id）或 "title"（组内按标题）
+    icons = { pending = "○", doing = "◐", done = "●", blocked = "✕" },
+    confirm = { done = true, force_done = true, block = true, remove = true },
+    keys = {},               -- lhs -> 动作名；false 表示禁用
+  })
+<
+示例： >
+  require("loop-kit").setup({ keys = { q = false, ["<C-s>"] = "sync" } })
+<
+同一项目的写操作串行执行（FIFO）；写失败保留当前选中、筛选与表单内容。
+
+==============================================================================
+6. 表单格式                                                      *loop-kit-form*
+
+e / a 在详情窗打开 buftype=acwrite 的 Markdown buffer，:w 由 BufWriteCmd
+接管并调用 loop-cli，不写本地文件。buffer 名形如
+loopkit://<root>/task/%2312 和 loopkit://<root>/new/<nonce>。
+
+>markdown
+  <!-- loopkit:task id=#12 -->
+  # 任务标题
+
+  <!-- loopkit:meta
+  tag: feature
+  deps: #3, #5
+  doc: loop/docs/example.md
+  -->
+
+  描述 Markdown。
+<
+规则：
+- 首个任务注释保存 id；新增表单使用 <!-- loopkit:task new -->。
+- 第一个一级标题是 title，必填且单行；其余标题留在 desc。
+- 唯一的 loopkit:meta 注释块接受 tag / deps / doc；未知键、重复键、非法 id
+  或非法路径在调用 CLI 前报错并标出行号。doc 必须是仓库根相对路径，不得以
+  / 或盘符开头，也不得包含 .. 或换行。
+- meta 块之后的全部文本是 desc（无 meta 块时从一级标题之后开始），保留多段
+  与 Markdown 结构。
+- deps 用逗号分隔并规范化为 #n；清空用 deps --set ''，清空 doc 用
+  doc --clear；新增时为空则不发送。
+- 以打开时的任务为 baseline 做字段 diff，只提交变化字段；desc 通过
+  --desc-file - 从 stdin 写入。
+- 表单不发送 status/flow/private/touch/meta；这些字段走各自命令
+  （d/D/b 与 F/P/T/M），避免绕过依赖门禁与 closedAt/hash 语义。
+- 保存成功后才清除 modified 并恢复详情；失败保持 dirty。对 dirty 表单取消、
+  关闭或重新打开时询问保存/放弃/取消，放弃必须显式选择。
+- 表单 buffer 设置 b:loopkit_form；即使有 format-on-save 钩子也只提交一次。
+
+==============================================================================
+7. provider 与写入语义                                          *loop-kit-provider*
+
+插件把 local、gitea、github、jira 交给同一个 CLI 适配层，不复制 provider
+协议；配置校验接受这四个值，实际能力以已安装的 loop-cli 为准。
+
+本仓库实际验证范围：
+  local    已验证：LOOP_KIT_REAL_CLI=1 下的临时项目覆盖
+           paths/add/list/edit/claim/done/block/remove
+  gitea    未验证：需在测试 issue 仓库执行手工矩阵
+  github   未验证：需独立测试环境
+  jira     未验证：需独立测试环境
+
+远端冲突：写操作可能因远端乐观并发（updatedAt 变化）被拒绝（退出码 4）。
+插件不自动重试、不合并、不覆盖；保留 dirty 表单并要求先同步再人工核对。
+done 被依赖门禁拒绝时展示未完成依赖，不自动 force；只有 D 追加 --force。
+退出码 5（网络/权限）保留旧快照，可重试 :LoopKit sync。
+
+local 删除与远端移出：
+  x 总是先确认，确认文案按源类型区分。
+  local     永久删除条目，并清理其他任务对它的依赖引用。
+  远端      只摘除 loop:todo 准入标签并保留远端 issue，操作幂等。
+  插件不重新实现这些语义，也不修改任何 JSON；旧版 CLI 缺少 remove 时由
+  健康检查提示升级。
+
+==============================================================================
+8. 事件与 API                                                    *loop-kit-api*
+
+公开 Lua API： >
+  local loop = require("loop-kit")
+  loop.setup(opts)
+  loop.open(opts)          -- 返回 board, created
+  loop.close(opts)         -- opts.all 关闭全部
+  loop.refresh(opts)       -- 默认读缓存；opts.sync = true 时完整同步
+  loop.sync(opts)
+  loop.get_snapshot(root)  -- 快照副本
+  loop.get_task(id, root)  -- 任务副本
+  loop.edit(id, opts)
+  loop.add(opts)
+  loop.remove(id, opts)
+  loop.actions(root)
+  loop.decide(opts)
+  loop.paths(opts, cb)
+  loop.health(opts)
+  loop.defaults()
+  loop.reset()
+<
+返回的快照与任务都是副本/只读约定。
+
+自动命令：
+  User LoopKitUpdated   data = { root, snapshot }
+  User LoopKitAction    data = { root, id, action, ok, error }
+用户取消不触发 LoopKitAction。
+
+高亮组均以 default = true 定义：LoopKitPending、LoopKitDoing、LoopKitDone、
+LoopKitBlocked、LoopKitId、LoopKitTitle、LoopKitTag、LoopKitMuted、
+LoopKitHeader、LoopKitError、LoopKitSelected。
+
+==============================================================================
+9. 健康检查与错误                                                *loop-kit-health*
+
+:checkhealth loop-kit
+:LoopKit health
+
+检查 Neovim 版本、配置可解析、CLI 可执行、--version、paths、tokenEnv 是否
+设置（只显示变量名，不打印值）、list --no-sync 是否可读、CLI 是否支持
+remove。健康检查始终使用 --no-sync，不访问网络。
+
+常见情况：
+  找不到 CLI        显示解析路径，提示 cli_path、$LOOP_BIN 或升级 CLI
+  配置缺失/非法     显示配置绝对路径；仍可用 :LoopKit paths 与健康检查
+  tokenEnv 未设置   只显示变量名；已有缓存仍可浏览
+  远端无缓存        提示先同步，不伪装成零任务
+  退出码 1          CLI/插件契约或用法错误，显示安全的 argv 摘要
+  退出码 2/3        指向配置或 LOOP 数据，建议 loop-cli validate
+  退出码 4          依赖/blocked 或远端冲突
+  退出码 5          网络/权限诊断，保留旧快照
+  stdout 非 JSON    报告 CLI 路径、退出码与截断输出，提示版本不匹配
+  看板已关闭        丢弃过期异步回调，不重绘已关闭窗口
+
+==============================================================================
+10. 测试                                                       *loop-kit-test*
+
+测试零第三方依赖，使用 headless Neovim、纯 Lua runner 与 fake CLI。 >
+
+  # 全部默认测试（real CLI 用例默认跳过）
+  nvim --headless -u tests/minimal_init.lua -l tests/run.lua
+
+  # 单个分组：unit / fake-dom / render / integration
+  nvim --headless -u tests/minimal_init.lua -l tests/run.lua -- --filter unit
+  nvim --headless -u tests/minimal_init.lua -l tests/run.lua -- --filter fake-dom
+  nvim --headless -u tests/minimal_init.lua -l tests/run.lua -- --filter render
+  nvim --headless -u tests/minimal_init.lua -l tests/run.lua -- --filter integration
+
+  # 真实 CLI 的 local 冒烟测试（临时目录，不碰开发者真实数据）
+  LOOP_KIT_REAL_CLI=1 nvim --headless -u tests/minimal_init.lua -l tests/run.lua -- --filter integration
+
+  # 空白字符检查
+  git diff --check
+<
+CI（.gitea/workflows/nvim.yml）安装固定版本 Neovim，运行默认测试与
+git diff --check，不访问真实 LOOP 服务。
+
+==============================================================================
+11. 已知边界                                                   *loop-kit-limits*
+
+- v1 只有 tab 双栏布局；浮动布局、Telescope 扩展、lualine 组件不在本版范围。
+- 插件不自建磁盘缓存或离线队列；远端完整同步需要 CLI 与网络可用。
+- 不实现 provider 协议、依赖门禁或冲突合并逻辑，全部以 CLI 返回为准。
+- 远端写操作尚未在自动化测试中覆盖；gitea/github/jira 需按手工矩阵验证后
+  才能声明通过。
+- touch 的 null（unknown）与空数组（显式空集合）显示不同；空数组会被 CLI 拒绝。
+- 未在 Windows 上验证。
+- loop-cli 0.1.0 是当前实测版本；更旧版本可能缺少 remove 或 --no-sync。
+
+手工验收矩阵（deferred，不阻塞自动化）：
+1. local 项目：浏览、筛选、编辑多段 desc、新增、claim/done/block/remove，
+   确认外部 loop-cli show/list 与插件一致。
+2. gitea 测试项目：无缓存启动、后台同步、字段编辑、flow/private/touch/meta、
+   移出循环，确认 issue 保留且 loop:todo 标签被摘除。
+3. 两个客户端同时编辑同一远端任务：后到者收到冲突，插件保留输入。
+4. 模拟无 token、断网、无权限、非法 LOOP 数据，核对提示与旧快照可用性。
+5. github/jira 仅在安全测试环境执行同一矩阵，结果补入 provider 表。
+
+ vim:tw=78:ts=8:noet:ft=help:norl:
