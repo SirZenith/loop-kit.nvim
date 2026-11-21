@@ -1,2 +1,6 @@
 /.pi/*
 !/.pi/loop-kit
+!/.pi/pi-wingman/
+
+/.pi/pi-wingman/*
+!/.pi/pi-wingman/permission.json

@@ -12,5 +12,11 @@
         "tokenEnv": "OPENCODE_API_KEY",
         "confidenceFloor": 0.7,
         "stateChars": 256
+    },
+    "isolation": {
+        "verify": [
+            "nvim --headless -u tests/minimal_init.lua -l tests/run.lua",
+            "git diff --check"
+        ]
     }
 }

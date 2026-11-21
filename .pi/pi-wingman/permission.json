@@ -1,0 +1,22 @@
+{
+    "rulesMerge": "append",
+    "rules": [
+        {
+            "match": {
+                "tool": [
+                    "bash",
+                    "run_in_background",
+                    "powershell",
+                    "run_in_background_powershell"
+                ],
+                "command": [
+                    "nvim --headless -u tests/minimal_init.lua -l tests/run.lua*",
+                    "nvim --version",
+                    "git diff --check*"
+                ]
+            },
+            "action": "allow",
+            "reason": "project test commands"
+        }
+    ]
+}
