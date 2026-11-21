@@ -3,7 +3,125 @@
   "tasks": {
     "#1": {
       "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
-      "flow": "doc-to-tasks"
+      "flow": "doc-to-tasks",
+      "branch": "pi-wt/loop-1-c4d0fdbe",
+      "baseSha": "93ae291e143365c5d808ed6ab0083b0847b3b3fa"
+    },
+    "#2": {
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/config.lua",
+        "lua/loop-kit/util.lua",
+        "lua/loop-kit/cli.lua",
+        "lua/loop-kit/source.lua",
+        "lua/loop-kit/state.lua",
+        "tests/minimal_init.lua",
+        "tests/run.lua",
+        "tests/helpers/**",
+        "tests/fixtures/**",
+        "tests/unit/config_spec.lua",
+        "tests/unit/cli_spec.lua",
+        "tests/unit/source_spec.lua",
+        "tests/unit/state_spec.lua",
+        "tests/fake-dom/cli_spec.lua"
+      ]
+    },
+    "#3": {
+      "deps": [
+        "#2"
+      ],
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/render.lua",
+        "lua/loop-kit/highlights.lua",
+        "tests/unit/render_spec.lua"
+      ]
+    },
+    "#4": {
+      "deps": [
+        "#2"
+      ],
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/actions.lua",
+        "tests/fake-dom/actions_spec.lua"
+      ]
+    },
+    "#5": {
+      "deps": [
+        "#2",
+        "#4"
+      ],
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/form.lua",
+        "tests/unit/form_spec.lua",
+        "tests/fake-dom/form_spec.lua",
+        "tests/render/form_spec.lua"
+      ]
+    },
+    "#6": {
+      "deps": [
+        "#2",
+        "#4"
+      ],
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/advanced.lua",
+        "lua/loop-kit/decide.lua",
+        "tests/unit/advanced_spec.lua",
+        "tests/unit/decide_spec.lua",
+        "tests/fake-dom/advanced_spec.lua",
+        "tests/fake-dom/decide_spec.lua"
+      ]
+    },
+    "#7": {
+      "deps": [
+        "#2",
+        "#3",
+        "#4",
+        "#5",
+        "#6"
+      ],
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/ui/**",
+        "tests/render/board_spec.lua",
+        "tests/render/list_spec.lua",
+        "tests/render/detail_spec.lua"
+      ]
+    },
+    "#8": {
+      "deps": [
+        "#7"
+      ],
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
+      "flow": "quick",
+      "touch": [
+        "plugin/loop-kit.lua",
+        "lua/loop-kit/init.lua",
+        "lua/loop-kit/health.lua",
+        "syntax/loopkit.vim",
+        "tests/integration/**"
+      ]
+    },
+    "#9": {
+      "deps": [
+        "#8"
+      ],
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
+      "flow": "quick",
+      "touch": [
+        "README.md",
+        "doc/loop-kit.txt",
+        ".gitea/workflows/nvim.yml"
+      ]
     }
   }
 }
