@@ -66,6 +66,8 @@
       ],
       "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
       "flow": "quick",
+      "branch": "pi-wt/loop-5-7cbc4f7d",
+      "baseSha": "a937c8063f53fa4b82797c94425d13320ad58460",
       "touch": [
         "lua/loop-kit/form.lua",
         "tests/unit/form_spec.lua",
@@ -80,6 +82,8 @@
       ],
       "doc": ".pi/loop-kit/docs/nvim/2026-11-21T23-49-46-neovim-companion-implementation-plan.md",
       "flow": "quick",
+      "branch": "pi-wt/loop-6-1451d443",
+      "baseSha": "a937c8063f53fa4b82797c94425d13320ad58460",
       "touch": [
         "lua/loop-kit/advanced.lua",
         "lua/loop-kit/decide.lua",
