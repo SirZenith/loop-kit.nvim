@@ -63,6 +63,7 @@ function M.new(opts)
   self.notify = opts.notify or noop
   self.confirm = vim.tbl_extend("force", DEFAULT_CONFIRM, opts.confirm or {})
   self.sync_after_write = opts.sync_after_write ~= false
+  self.on_result = opts.on_result
   self.exec = opts.exec or function(command, args, run_opts, cb)
     assert(self.client, "loop-kit.actions: client or exec is required")
     return self.client:run(command, args, run_opts, cb)
@@ -75,6 +76,15 @@ function M.new(opts)
     self.source:list({ no_sync = true }, cb)
   end
   return self
+end
+
+function Actions:_settle(res, cb)
+  if type(self.on_result) == "function" and type(res) == "table" then
+    pcall(self.on_result, res)
+  end
+  if cb then
+    cb(res)
+  end
 end
 
 function Actions:_invalid(action, id, message)
@@ -383,10 +393,12 @@ function Actions:claim(id, cb)
   cb = cb or noop
   id = util.normalize_id(id)
   if not id then
-    cb(self:_invalid("claim", id))
+    self:_settle(self:_invalid("claim", id), cb)
     return
   end
-  self:_submit("claim", id, "claim", { id }, {}, cb)
+  self:_submit("claim", id, "claim", { id }, {}, function(res)
+    self:_settle(res, cb)
+  end)
 end
 
 --- Complete a task. `opts.force = true` (or `force_done`) adds --force; done
@@ -401,7 +413,7 @@ function Actions:done(id, opts, cb)
   local action = force and "force_done" or "done"
   id = util.normalize_id(id)
   if not id then
-    cb(self:_invalid(action, id))
+    self:_settle(self:_invalid(action, id), cb)
     return
   end
 
@@ -410,7 +422,9 @@ function Actions:done(id, opts, cb)
     if force then
       args[#args + 1] = "--force"
     end
-    self:_submit(action, id, "done", args, { force = force }, cb)
+    self:_submit(action, id, "done", args, { force = force }, function(res)
+      self:_settle(res, cb)
+    end)
   end
 
   if self.confirm[action] then
@@ -425,7 +439,7 @@ function Actions:done(id, opts, cb)
         start()
         return
       end
-      cb({ ok = false, action = action, id = id, code = "cancelled", message = "已取消" })
+      self:_settle({ ok = false, action = action, id = id, code = "cancelled", message = "已取消" }, cb)
     end)
     return
   end
@@ -442,23 +456,25 @@ function Actions:block(id, cb)
   cb = cb or noop
   id = util.normalize_id(id)
   if not id then
-    cb(self:_invalid("block", id))
+    self:_settle(self:_invalid("block", id), cb)
     return
   end
 
   self.input(string.format("阻塞 %s 的原因：", id), function(value)
     local reason = util.trim(value)
     if not reason or reason == "" then
-      cb({
+      self:_settle({
         ok = false,
         action = "block",
         id = id,
         code = "cancelled",
         message = "已取消：阻塞原因不能为空",
-      })
+      }, cb)
       return
     end
-    self:_submit("block", id, "block", { id, "--reason", reason }, { reason = reason }, cb)
+    self:_submit("block", id, "block", { id, "--reason", reason }, { reason = reason }, function(res)
+      self:_settle(res, cb)
+    end)
   end)
 end
 
@@ -472,12 +488,14 @@ function Actions:remove(id, opts, cb)
   cb = cb or noop
   id = util.normalize_id(id)
   if not id then
-    cb(self:_invalid("remove", id))
+    self:_settle(self:_invalid("remove", id), cb)
     return
   end
 
   local function start()
-    self:_submit("remove", id, "remove", { id }, { source_kind = self:_source_kind() }, cb)
+    self:_submit("remove", id, "remove", { id }, { source_kind = self:_source_kind() }, function(res)
+      self:_settle(res, cb)
+    end)
   end
 
   if not self.confirm.remove then
@@ -490,7 +508,7 @@ function Actions:remove(id, opts, cb)
       start()
       return
     end
-    cb({ ok = false, action = "remove", id = id, code = "cancelled", message = "已取消" })
+    self:_settle({ ok = false, action = "remove", id = id, code = "cancelled", message = "已取消" }, cb)
   end)
 end
 

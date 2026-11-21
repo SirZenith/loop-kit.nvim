@@ -54,6 +54,13 @@ function State:_visible()
     if ga == #GROUP_ORDER + 1 and a.status ~= b.status then
       return tostring(a.status) < tostring(b.status)
     end
+    if self.sort == "title" then
+      local ta = tostring(a.title or ""):lower()
+      local tb = tostring(b.title or ""):lower()
+      if ta ~= tb then
+        return ta < tb
+      end
+    end
     return util.compare_ids(a.id, b.id) < 0
   end)
 
@@ -135,6 +142,14 @@ end
 function State:set_query(query)
   local previous = self:_ids()
   self.query = query or ""
+  self:_restore(previous)
+  return self
+end
+
+--- Change the within-group ordering ("status" by id, "title" by title).
+function State:set_sort(sort)
+  local previous = self:_ids()
+  self.sort = sort or "status"
   self:_restore(previous)
   return self
 end
@@ -272,6 +287,7 @@ function Manager:get(root)
     st = setmetatable({
       root = key,
       filter = "open",
+      sort = "status",
       query = "",
       tasks = {},
       _selected_id = nil,

@@ -49,6 +49,7 @@ M.DEFAULT_KEYS = DEFAULT_KEYS
 M.config = {
   list_width = 38,
   default_filter = "open",
+  sort = "status",
   auto_sync = true,
   keys = {},
 }
@@ -153,6 +154,9 @@ function Board:_ensure_deps()
       -- Fresh state: honour the configured default filter.
       self.state.filter = default_filter
     end
+    if self.state.set_sort then
+      self.state:set_sort(self.opts.sort or M.config.sort)
+    end
     self.loaded = #(self.state.tasks or {}) > 0
   end
 end
@@ -196,6 +200,7 @@ function Board:_create_ui()
     buf = list_buf,
     win = list_win,
     icons = self.opts.icons or M.config.icons,
+    sort = self.opts.sort or M.config.sort,
     on_select = function()
       self:_draw_detail()
     end,
@@ -506,6 +511,19 @@ function Board:refresh(opts)
       self.load_error = res.message or "刷新失败"
     end
     self:draw()
+    if self.opts.on_updated then
+      pcall(self.opts.on_updated, self, self.source and self.source.snapshot)
+    end
+    if opts.then_sync and not self.closed and (res.ok or res.code == "no_cache" or res.no_cache) then
+      local kind = self.source and self.source.snapshot.source and self.source.snapshot.source.kind
+      if kind ~= "local" then
+        vim.schedule(function()
+          if not self.closed then
+            self:sync()
+          end
+        end)
+      end
+    end
   end
 
   if opts.sync then
@@ -586,6 +604,7 @@ function Board:_ensure_actions()
     input = self.opts.input,
     confirm = self.opts.confirm,
     sync_after_write = self.opts.sync_after_write,
+    on_result = self.opts.on_action,
     notify = function(message)
       self:_notify(message)
     end,
@@ -891,7 +910,8 @@ function M.open(opts)
       auto_sync = M.config.auto_sync
     end
     if auto_sync then
-      self:refresh({ sync = true })
+      -- Render the cache first, then let a full sync land in the background.
+      self:refresh({ no_sync = true, then_sync = true })
     else
       self:refresh({ no_sync = true })
     end
