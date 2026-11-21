@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "loop-kit/loop.meta.schema.json",
+  "title": "loop-kit loop 元数据（循环数据目录中的 loop.meta.json）",
+  "description": "远端源（Gitea 等）下 loop 专属字段的权威文件：key 为 issue 编号（#123），value 只放远端没有对应物的字段。远端快照在 LOOP.remote.json（派生、可重建、已 gitignore），本文件必须随项目提交。代码侧的权威实现见 crates/loop-core/src/meta.rs。",
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "type": "object",
+  "required": [
+    "version",
+    "tasks"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
+    "tasks": {
+      "description": "#编号 → loop 专属字段。",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^#[0-9]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "deps": {
+            "description": "依赖的远端条目 id；为空或缺省表示无依赖。",
+            "oneOf": [
+              {
+                "$ref": "#/$defs/nullableString"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/nonEmptyString"
+                }
+              }
+            ]
+          },
+          "doc": {
+            "description": "实现文档路径（绝对路径原样；相对路径按 loop.config.json 所在目录解析），null 或缺省表示尚无。",
+            "$ref": "#/$defs/nullableString"
+          },
+          "hash": {
+            "description": "实现提交的短 hash，null 或缺省表示尚未提交。",
+            "$ref": "#/$defs/nullableString"
+          },
+          "blockedReason": {
+            "description": "条目被标记为 blocked 的原因（`loop-cli block --reason`）。blocked 状态本身由 loop:blocked 标签表达，但原因在 issue 上没有落点（PLAN §3.5 禁止写 issue 正文与评论），故记在这里；这是对 PLAN §4.3「value 仅 deps / doc / hash」的有意偏离，属向后兼容的可选新增字段（version 保持 1）。",
+            "$ref": "#/$defs/nullableString"
+          },
+          "flow": {
+            "description": "显式流程：内置档位名、本文件 `flows` 定义的自定义名，或按时序排列的 stage 数组（非空、至少两项、不重复、末项必须是 commit）。缺省/null 表示未指定，此时才进入推断路径（judge / 主 agent 判断）。",
+            "oneOf": [
+              {
+                "enum": [
+                  "full",
+                  "research-only",
+                  "quick",
+                  "spec-impl",
+                  "research-split",
+                  "doc-to-tasks"
+                ]
+              },
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "not": {
+                  "enum": [
+                    "full",
+                    "research-only",
+                    "quick",
+                    "spec-impl",
+                    "research-split",
+                    "doc-to-tasks",
+                    "research",
+                    "spec",
+                    "json-task-split",
+                    "doc-task-split",
+                    "decision-question",
+                    "impl",
+                    "verify",
+                    "commit"
+                  ]
+                },
+                "description": "本文件 `flows` 中定义的自定义流程名（加载时展开成内置 stage 序列）。"
+              },
+              {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "enum": [
+                    "research",
+                    "spec",
+                    "json-task-split",
+                    "doc-task-split",
+                    "decision-question",
+                    "impl",
+                    "verify",
+                    "commit"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isPrivateDesc": {
+            "description": "#37：标记该条目含不可外发信息——标了就不把 desc 送给 judge（外部服务）。",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "docParent": {
+            "description": "父级参考文档（绝对路径原样；相对路径按 loop.config.json 所在目录解析）。",
+            "$ref": "#/$defs/nullableString"
+          },
+          "specPrompt": {
+            "description": "任务级实现文档提示词覆盖文件路径。",
+            "$ref": "#/$defs/nullableString"
+          },
+          "researchPrompt": {
+            "description": "任务级调研提示词覆盖文件路径。",
+            "$ref": "#/$defs/nullableString"
+          },
+          "codePrompt": {
+            "description": "任务级实现提示词覆盖文件路径。",
+            "$ref": "#/$defs/nullableString"
+          },
+          "verifyPrompt": {
+            "description": "任务级验收提示词覆盖文件路径。",
+            "$ref": "#/$defs/nullableString"
+          },
+          "docTaskSplitPrompt": {
+            "description": "任务级拆分提示词覆盖文件路径。",
+            "$ref": "#/$defs/nullableString"
+          },
+          "userPrompt": {
+            "description": "任务级补充指令（Markdown），追加到各阶段 prompt 末尾。",
+            "$ref": "#/$defs/nullableString"
+          },
+          "stagePrompt": {
+            "description": "逐阶段额外提示词：键为注册阶段名，值为该阶段 prompt 末尾追加的「## 本阶段额外要求」内容；null = 清除。",
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "touch": {
+            "description": "#316：任务级写集（非空的仓库相对路径 / glob 数组）；null = 显式清除回 unknown；键缺失 = 不动/unknown；空数组非法。",
+            "oneOf": [
+              {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/nonEmptyString"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "branch": {
+            "description": "worktree 隔离的任务身份：分支名（T2，#272）。",
+            "$ref": "#/$defs/nullableString"
+          },
+          "baseSha": {
+            "description": "worktree 隔离的任务身份：worktree 创建时的基 commit（完整 id，40 或 64 位 hex）。",
+            "$ref": "#/$defs/nullableString"
+          }
+        }
+      }
+    },
+    "flows": {
+      "type": "object",
+      "description": "可选的自定义 flow 定义表：名字 → 有序 stage 名数组，元素可以是内置 stage、`<module>.<stage>` 外部阶段，或本表内已定义的其他名字（会递归展开）。名字须小写 kebab-case（`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`），不得与内置档位 / stage 重名。作用域仅限本文件内的任务。",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

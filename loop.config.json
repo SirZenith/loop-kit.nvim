@@ -1,0 +1,16 @@
+{
+    "$schema": ".pi/loop-kit/schema/loop.config.schema.json",
+    "version": 1,
+    "provider": "gitea",
+    "loopRoot": ".pi/loop-kit",
+    "baseURL": "https://git.dispersion.cc/api/v1",
+    "repo": "Dispersion/loop-kit.nvim",
+    "tokenEnv": "GITEA_API_KEY",
+    "judge": {
+        "baseURL": "https://opencode.ai/zen/v1/systemone",
+        "model": "jev-1.13-free",
+        "tokenEnv": "OPENCODE_API_KEY",
+        "confidenceFloor": 0.7,
+        "stateChars": 256
+    }
+}

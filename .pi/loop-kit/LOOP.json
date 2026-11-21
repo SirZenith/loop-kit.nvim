@@ -1,0 +1,5 @@
+{
+  "$schema": "./schema/LOOP.schema.json",
+  "version": 1,
+  "tasks": []
+}
