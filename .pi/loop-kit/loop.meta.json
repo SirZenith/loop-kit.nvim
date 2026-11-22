@@ -154,6 +154,7 @@
     },
     "#11": {
       "doc": ".pi/loop-kit/docs/nvim/2026-11-22T15-18-00-per-field-edit-mode.md",
+      "hash": "631c3a4",
       "flow": "quick",
       "touch": [
         "lua/loop-kit/ui/board.lua",
