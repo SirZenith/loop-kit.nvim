@@ -194,6 +194,39 @@ describe("render.detail", function()
     truthy(with_fields.fields.isPrivateDesc > with_fields.fields.meta)
   end)
 
+  it("highlights boolean values with the Constant group", function()
+    local out = render.detail(task("#8", "doing", { isPrivateDesc = false }), {
+      analysis = { summary = "ok", outstanding = 0, eligible = true, blocked = false, stuck = true },
+    })
+
+    local function hl_for(field, value)
+      for _, range in ipairs(out.highlights) do
+        if range.line == out.fields[field] then
+          local line = out.lines[range.line]
+          if line:sub(range.col_start + 1, range.col_end) == value then
+            return range.hl_group
+          end
+        end
+      end
+    end
+
+    eq("LoopKitDetailConstant", hl_for("isPrivateDesc", "false"))
+    eq("LoopKitDetailConstant", hl_for("eligible", "true"))
+    eq("LoopKitDetailConstant", hl_for("blocked", "false"))
+    eq("LoopKitDetailConstant", hl_for("stuck", "true"))
+  end)
+
+  it("keeps unset booleans muted instead of Constant", function()
+    local out = render.detail(task("#9", "doing"))
+    local hl
+    for _, range in ipairs(out.highlights) do
+      if range.line == out.fields.isPrivateDesc then
+        hl = range.hl_group
+      end
+    end
+    eq("LoopKitDetailMuted", hl)
+  end)
+
   it("groups key/value fields and separates groups with rules", function()
     local out = render.detail(task("#7", "doing", {
       deps = { "#2" },
@@ -298,6 +331,14 @@ describe("loop-kit highlights", function()
       eq(link, hl.link, name .. " must link to " .. link)
       eq(true, hl.default, name .. " must be defined with default=true")
     end
+  end)
+
+  it("links the detail boolean value group to Constant", function()
+    highlights.setup()
+
+    local hl = vim.api.nvim_get_hl(0, { name = "LoopKitDetailConstant", link = true })
+    eq("Constant", hl.link)
+    eq(true, hl.default)
   end)
 
   it("never overrides a user definition and is safe to call twice", function()

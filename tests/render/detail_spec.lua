@@ -65,6 +65,13 @@ describe("ui.detail: readonly markdown view", function()
     eq("- deps: #2 (done)", line_with(lines, "- deps:"))
     eq("- flow: spec > impl > commit", line_with(lines, "- flow:"))
     eq("- isPrivateDesc: true", line_with(lines, "- isPrivateDesc:"))
+    local private_value_hl
+    for _, range in ipairs(rendered.highlights) do
+      if range.line == rendered.fields.isPrivateDesc and range.col_start >= #"- isPrivateDesc: " then
+        private_value_hl = range.hl_group
+      end
+    end
+    eq("LoopKitDetailConstant", private_value_hl, "boolean value uses the Constant group")
     eq("- touch:", line_with(lines, "- touch:"))
     truthy(line_with(lines, "  - lua/loop-kit/ui/detail.lua"))
     eq("- meta: branch=main baseSha=abc123", line_with(lines, "- meta:"))

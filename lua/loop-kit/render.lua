@@ -339,11 +339,14 @@ function M.detail(task, opts)
     return line
   end
 
-  local function subfield(key, value)
+  local function subfield(key, value, value_hl)
     local line = push(string.format("  - %s: %s", key, value))
     out.fields[key] = line
     push_hl(line, 2, 4, "LoopKitDetailKey")
     push_hl(line, 4, 4 + #key, "LoopKitDetailKey")
+    if value_hl then
+      push_hl(line, 6 + #key, #(out.lines[line]), value_hl)
+    end
     return line
   end
 
@@ -447,7 +450,7 @@ function M.detail(task, opts)
   if private_desc == nil or private_desc == vim.NIL then
     field("isPrivateDesc", "(unset)", "LoopKitDetailMuted")
   else
-    field("isPrivateDesc", private_desc == true and "true" or "false")
+    field("isPrivateDesc", private_desc == true and "true" or "false", "LoopKitDetailConstant")
   end
 
   local analysis = opts.analysis
@@ -458,9 +461,9 @@ function M.detail(task, opts)
     field("decide", tostring(analysis.summary or ""))
     field("analysis", "")
     subfield("outstanding", tonumber(analysis.outstanding) or 0)
-    subfield("eligible", tostring(analysis.eligible == true))
-    subfield("blocked", tostring(analysis.blocked == true))
-    subfield("stuck", tostring(analysis.stuck == true))
+    subfield("eligible", tostring(analysis.eligible == true), "LoopKitDetailConstant")
+    subfield("blocked", tostring(analysis.blocked == true), "LoopKitDetailConstant")
+    subfield("stuck", tostring(analysis.stuck == true), "LoopKitDetailConstant")
   end
 
   local blocked_reason = task.blockedReason

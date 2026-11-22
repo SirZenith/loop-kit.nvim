@@ -19,6 +19,7 @@ M.links = {
   LoopKitDetailSection = "Title",
   LoopKitDetailKey = "Comment",
   LoopKitDetailValue = "Normal",
+  LoopKitDetailConstant = "Constant",
   LoopKitDetailPath = "String",
   LoopKitDetailMuted = "Comment",
   LoopKitDetailId = "Identifier",
