@@ -3,6 +3,8 @@
 -- machine and Actions owns the loop-cli calls.
 local M = {}
 
+local kv = require("loop-kit.kv")
+
 local BUILTIN_STAGES = {
   "research",
   "spec",
@@ -21,15 +23,9 @@ end
 
 M.BUILTIN_STAGES = BUILTIN_STAGES
 
--- Fields that render as anchors but are not editable in this feature.
-local READONLY_FIELDS = {
-  "id",
-  "status",
+-- Key/value fields that open their own editor.
+local KV_FIELDS = {
   "tag",
-  "origin",
-  "openAt",
-  "closedAt",
-  "hash",
   "deps",
   "doc",
   "docParent",
@@ -39,22 +35,88 @@ local READONLY_FIELDS = {
   "verifyPrompt",
   "docTaskSplitPrompt",
   "flow",
-  "private",
-  "touch",
-  "meta",
-  "decide",
-  "analysis",
-  "outstanding",
-  "eligible",
-  "blocked",
-  "stuck",
 }
+
+M.KV_FIELDS = KV_FIELDS
+
+-- Fields that render as anchors but are not editable in this feature.
+local READONLY_FIELDS = {
+  {
+    name = "id",
+    message = "任务 id 不可编辑",
+  },
+  {
+    name = "status",
+    message = "状态由 c / d / b 修改",
+  },
+  {
+    name = "origin",
+    message = "来源由 origin:* 标签维护",
+  },
+  {
+    name = "openAt",
+    message = "开始时间由生命周期维护",
+  },
+  {
+    name = "closedAt",
+    message = "结束时间由生命周期维护",
+  },
+  {
+    name = "hash",
+    message = "提交由 done --hash 维护",
+  },
+  {
+    name = "private",
+    message = "该行暂不支持编辑",
+  },
+  {
+    name = "meta",
+    message = "该行暂不支持编辑",
+  },
+  {
+    name = "decide",
+    message = "该行暂不支持编辑",
+  },
+  {
+    name = "analysis",
+    message = "该行暂不支持编辑",
+  },
+  {
+    name = "outstanding",
+    message = "该行暂不支持编辑",
+  },
+  {
+    name = "eligible",
+    message = "该行暂不支持编辑",
+  },
+  {
+    name = "blocked",
+    message = "该行暂不支持编辑",
+  },
+  {
+    name = "stuck",
+    message = "该行暂不支持编辑",
+  },
+}
+
+local DEFAULT_READONLY_MESSAGE = "该行暂不支持编辑"
 
 local LABELS = {
   title = "任务标题",
   desc = "任务描述",
   user_prompt = "用户提示词",
   stage_new = "新建阶段提示词",
+  tag = "任务分类",
+  deps = "依赖",
+  doc = "实现文档",
+  docParent = "父条目",
+  specPrompt = "spec 提示词",
+  researchPrompt = "调研提示词",
+  codePrompt = "实现提示词",
+  verifyPrompt = "验收提示词",
+  docTaskSplitPrompt = "文档拆分提示词",
+  flow = "流程",
+  touch = "写集",
 }
 
 --- Whether `name` is a valid stage key (builtin or dotted external name).
@@ -68,7 +130,7 @@ function M.is_valid_stage(name)
   return BUILTIN[name] == true or name:find(".", 1, true) ~= nil
 end
 
-M.DEFAULT_TAGS = { "feature", "bugfix", "refactor", "ux", "visual", "docs", "chore" }
+M.DEFAULT_TAGS = vim.deepcopy(kv.FALLBACK_TAGS)
 
 local tag_cache = {}
 
@@ -104,22 +166,6 @@ local function loop_root_dir(root, hint)
   return root .. "/.pi/loop-kit"
 end
 
-local function parse_tags(content)
-  local tags = {}
-  local in_section = false
-  for line in (content .. "\n"):gmatch("(.-)\n") do
-    if line:match("^#%s") then
-      in_section = line:find("任务分类", 1, true) ~= nil
-    elseif in_section then
-      local tag = line:match("^%s*[-*]%s*`([^`]+)`")
-      if tag and tag ~= "" then
-        tags[#tags + 1] = tag
-      end
-    end
-  end
-  return tags
-end
-
 --- Tag candidates from `<loopRoot>/TARGETS.md`; fall back to the builtins.
 function M.tag_list(root, loop_root_hint)
   local dir = loop_root_dir(root, loop_root_hint)
@@ -134,16 +180,7 @@ function M.tag_list(root, loop_root_hint)
     return cached.tags
   end
 
-  local tags
-  local fd = io.open(path, "rb")
-  if fd then
-    local content = fd:read("*a")
-    fd:close()
-    tags = parse_tags(content)
-  end
-  if not tags or #tags == 0 then
-    tags = M.DEFAULT_TAGS
-  end
+  local tags = kv.tag_values(dir)
   tag_cache[path] = { stamp = stamp, tags = tags }
   return tags
 end
@@ -194,8 +231,12 @@ function M.target_at(rendered, line)
   end
 
   add(rendered.title_line or fields.title_line, { kind = "title" })
-  for _, name in ipairs(READONLY_FIELDS) do
-    add(fields[name], { kind = "readonly" })
+  for _, name in ipairs(KV_FIELDS) do
+    add(fields[name], { kind = name })
+  end
+  add(fields.touch, { kind = "touch" })
+  for _, spec in ipairs(READONLY_FIELDS) do
+    add(fields[spec.name], { kind = "readonly", message = spec.message })
   end
   add(fields.desc, { kind = "desc" })
   add(fields.desc_content, { kind = "desc" })
@@ -231,7 +272,7 @@ function M.target_at(rendered, line)
     end
   end
   if not chosen then
-    return { kind = "readonly" }
+    return { kind = "readonly", message = DEFAULT_READONLY_MESSAGE }
   end
 
   local target = chosen.target
@@ -244,7 +285,7 @@ function M.target_at(rendered, line)
   if target.kind == "stage_content" then
     return { kind = "stage_content", stage = target.stage }
   end
-  return { kind = target.kind }
+  return { kind = target.kind, message = target.message }
 end
 
 local function encode_id(id)

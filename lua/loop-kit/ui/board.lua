@@ -10,6 +10,8 @@ local list_ui = require("loop-kit.ui.list")
 local detail_ui = require("loop-kit.ui.detail")
 local help_ui = require("loop-kit.ui.help")
 local edit_ui = require("loop-kit.edit")
+local kv = require("loop-kit.kv")
+local picker = require("loop-kit.ui.picker")
 
 -- Define the default links as soon as the board is loaded: users are not
 -- required to call setup(), and extmarks resolve hl_group names eagerly.
@@ -754,6 +756,20 @@ function Board:_edit_focus_for(target)
   if target.kind == "stage_content" or target.kind == "stage_rename" then
     return { field = "stagePrompt." .. tostring(target.stage) }
   end
+  if target.kind == "touch"
+    or target.kind == "tag"
+    or target.kind == "deps"
+    or target.kind == "doc"
+    or target.kind == "docParent"
+    or target.kind == "specPrompt"
+    or target.kind == "researchPrompt"
+    or target.kind == "codePrompt"
+    or target.kind == "verifyPrompt"
+    or target.kind == "docTaskSplitPrompt"
+    or target.kind == "flow"
+  then
+    return { field = target.kind }
+  end
   return nil
 end
 
@@ -889,6 +905,17 @@ function Board:_save_edit(text, cb)
     actions:edit_user_prompt(id, text, done)
   elseif target.kind == "stage_content" then
     actions:set_stage_prompt(id, target.stage, text, done)
+  elseif target.kind == "touch" then
+    local advanced = require("loop-kit.advanced")
+    local paths = kv.touch_paths(vim.split(text, "\n", { plain = true }))
+    for _, path in ipairs(paths) do
+      local ok, err = advanced.valid_touch_path(path)
+      if not ok then
+        cb(false, err)
+        return
+      end
+    end
+    self:_ensure_advanced():set_touch(id, paths, done)
   else
     cb(false, "该目标不支持编辑")
   end
@@ -995,6 +1022,218 @@ function Board:_edit_stage_rename(task, stage)
   end)
 end
 
+local function same_set(left, right)
+  left = left or {}
+  right = right or {}
+  if #left ~= #right then
+    return false
+  end
+  local seen = {}
+  for _, value in ipairs(left) do
+    seen[value] = (seen[value] or 0) + 1
+  end
+  for _, value in ipairs(right) do
+    if (seen[value] or 0) == 0 then
+      return false
+    end
+    seen[value] = seen[value] - 1
+  end
+  return true
+end
+
+function Board:_edit_tag(task)
+  local loop_root = self.config and self.config.loop_root_hint
+  picker.select_one({
+    items = kv.tag_values(loop_root),
+    current = task.tag,
+    prompt = "分类 tag",
+    select = self.opts.select,
+    on_choice = function(value)
+      if value == nil or self.closed or value == task.tag then
+        return
+      end
+      self:_ensure_advanced():set_tag(task.id, value, function(res)
+        self:_after(res)
+        if res and res.ok then
+          self:select(task.id)
+          self:draw()
+          self:_focus_section({ field = "tag" })
+        end
+      end)
+    end,
+  })
+end
+
+function Board:_edit_deps(task)
+  local tasks = (self.state and self.state.tasks) or {}
+  local candidates = kv.dependency_candidates(tasks, task.id)
+  local current = {}
+  local current_list = {}
+  for _, dep in ipairs(type(task.deps) == "table" and task.deps or {}) do
+    local id = kv.normalize_id(dep) or tostring(dep)
+    if not current[id] then
+      current[id] = true
+      current_list[#current_list + 1] = id
+    end
+  end
+
+  local items = {}
+  local kept = {}
+  for _, candidate in ipairs(candidates.selectable) do
+    kept[candidate.id] = true
+    local label = candidate.id
+    if candidate.status ~= nil and candidate.status ~= "" then
+      label = label .. " " .. tostring(candidate.status)
+    end
+    if candidate.title ~= nil and candidate.title ~= "" then
+      label = label .. " " .. tostring(candidate.title)
+    end
+    items[#items + 1] = {
+      value = candidate.id,
+      label = label,
+      selected = current[candidate.id] == true,
+    }
+  end
+  for _, id in ipairs(current_list) do
+    if not kept[id] then
+      items[#items + 1] = {
+        value = id,
+        label = id .. "（不在当前列表）",
+        selected = true,
+      }
+    end
+  end
+
+  local multi = self.opts.multi or picker.multi
+  multi({
+    items = items,
+    title = "依赖 · " .. tostring(task.id),
+    hidden = candidates.hidden,
+    on_confirm = function(values)
+      if self.closed then
+        return
+      end
+      if same_set(values, current_list) then
+        return
+      end
+      self:_ensure_advanced():set_deps(task.id, values, function(res)
+        self:_after(res)
+        if res and res.ok then
+          self:select(task.id)
+          self:draw()
+          self:_focus_section({ field = "deps" })
+        end
+      end)
+    end,
+  })
+end
+
+function Board:_edit_prompt(task, field)
+  local current = task[field]
+  if type(current) ~= "string" then
+    current = ""
+  end
+  local labels = {
+    doc = "实现文档路径: ",
+    docParent = "父条目: ",
+    specPrompt = "spec 提示词: ",
+    researchPrompt = "调研提示词: ",
+    codePrompt = "实现提示词: ",
+    verifyPrompt = "验收提示词: ",
+    docTaskSplitPrompt = "文档拆分提示词: ",
+  }
+  self:_edit_input(labels[field] or (field .. ": "), current, function(value)
+    if value == nil or self.closed then
+      return
+    end
+    value = tostring(value)
+    if value == current then
+      return
+    end
+    local advanced = self:_ensure_advanced()
+    local function done(res)
+      self:_after(res)
+      if res and res.ok then
+        self:select(task.id)
+        self:draw()
+        self:_focus_section({ field = field })
+      end
+    end
+    if field == "doc" then
+      advanced:set_doc(task.id, value, done)
+    else
+      advanced:set_prompt(task.id, field, value, done)
+    end
+  end)
+end
+
+function Board:_edit_flow(task)
+  local advanced = self:_ensure_advanced()
+  advanced:list_flows(function(flows)
+    if self.closed then
+      return
+    end
+    if not flows then
+      -- The flow list is best-effort: fall back to the builtin names.
+      flows = { builtin = vim.deepcopy(require("loop-kit.advanced").FLOWS), custom = {} }
+      self:_notify("读取流程列表失败，使用内置流程")
+    end
+    local adv = require("loop-kit.advanced")
+    local items = adv.flow_items(flows)
+    items[#items + 1] = adv.CUSTOM_FLOW
+    items[#items + 1] = adv.CLEAR_FLOW
+    picker.select_one({
+      items = items,
+      current = task.flow,
+      prompt = "流程",
+      select = self.opts.select,
+      on_choice = function(choice)
+        if choice == nil or self.closed then
+          return
+        end
+        local function done(res)
+          self:_after(res)
+          if res and res.ok then
+            self:select(task.id)
+            self:draw()
+            self:_focus_section({ field = "flow" })
+          end
+        end
+        if choice == adv.CLEAR_FLOW then
+          return advanced:set_flow(task.id, "", done)
+        end
+        if choice == adv.CUSTOM_FLOW then
+          return self:_edit_input("stage 列表（逗号分隔，必须以 commit 收尾）：", "", function(raw)
+            if raw == nil or self.closed then
+              return
+            end
+            local stages = adv.split_stages(raw)
+            local ok, value = adv.validate_stages(stages)
+            if not ok then
+              self:_notify(value)
+              return
+            end
+            advanced:set_flow(task.id, table.concat(value, ","), done)
+          end)
+        end
+        if choice == task.flow then
+          return
+        end
+        advanced:set_flow(task.id, choice, done)
+      end,
+    })
+  end)
+end
+
+function Board:_edit_touch(task)
+  local paths = type(task.touch) == "table" and task.touch or {}
+  local content = {}
+  for _, path in ipairs(paths) do
+    content[#content + 1] = tostring(path)
+  end
+  self:_begin_edit({ kind = "touch" }, task, table.concat(content, "\n"), false)
+end
+
 function Board:_start_edit()
   if self.closed then
     return
@@ -1008,11 +1247,33 @@ function Board:_start_edit()
     return
   end
   if target.kind == "readonly" then
-    self:_notify("该行暂不支持编辑")
+    self:_notify(target.message or "该行暂不支持编辑")
     return
   end
   if target.kind == "title" then
     return self:_edit_title(task)
+  end
+  if target.kind == "tag" then
+    return self:_edit_tag(task)
+  end
+  if target.kind == "deps" then
+    return self:_edit_deps(task)
+  end
+  if target.kind == "flow" then
+    return self:_edit_flow(task)
+  end
+  if target.kind == "touch" then
+    return self:_edit_touch(task)
+  end
+  if target.kind == "doc"
+    or target.kind == "docParent"
+    or target.kind == "specPrompt"
+    or target.kind == "researchPrompt"
+    or target.kind == "codePrompt"
+    or target.kind == "verifyPrompt"
+    or target.kind == "docTaskSplitPrompt"
+  then
+    return self:_edit_prompt(task, target.kind)
   end
   if target.kind == "stage_new" then
     return self:_edit_stage_new(task)

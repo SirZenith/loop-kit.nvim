@@ -99,11 +99,20 @@ local function list_response(tasks)
   return json({ source = { kind = "local" }, tasks = tasks, analysis = {} })
 end
 
+-- `flow --list` and the following write share one command name; this payload
+-- satisfies both the flow-list decoder and the task decoder.
+local function flow_response(extra)
+  return json(vim.tbl_extend("force", {
+    builtin = advanced_mod.FLOWS,
+    custom = {},
+  }, task("#6", "pending", extra)))
+end
+
 describe("advanced flow", function()
   it("sets a named flow through the flow subcommand", function()
     local f, source, st, adv = harness({ pick = "quick" })
     seed(source, st, { task("#6", "pending") })
-    f:respond("flow", { stdout = json(task("#6", "pending", { flow = "quick" })) })
+    f:respond("flow", { stdout = flow_response({ flow = "quick" }) })
     f:respond("list", { stdout = list_response({ task("#6", "pending", { flow = "quick" }) }) })
 
     local res = await(function(cb)
@@ -112,8 +121,9 @@ describe("advanced flow", function()
 
     truthy(res.ok, vim.inspect(res))
     eq("flow", res.action)
-    eq(full_argv(f, "flow", { "#6", "--flow", "quick" }), f:call(1).argv)
-    eq(full_argv(f, "list", { "--no-sync" }), f:call(2).argv)
+    eq(full_argv(f, "flow", { "--list", "--no-sync" }), f:call(1).argv)
+    eq(full_argv(f, "flow", { "#6", "--flow", "quick" }), f:call(2).argv)
+    eq(full_argv(f, "list", { "--no-sync" }), f:call(3).argv)
     eq("quick", st.tasks[1].flow)
   end)
 
@@ -123,7 +133,7 @@ describe("advanced flow", function()
       inputs = { " research, spec ,impl,verify,commit " },
     })
     seed(source, st, { task("#6", "pending") })
-    f:respond("flow", { stdout = json(task("#6", "pending")) })
+    f:respond("flow", { stdout = flow_response() })
     f:respond("list", { stdout = list_response({ task("#6", "pending") }) })
 
     local res = await(function(cb)
@@ -133,7 +143,7 @@ describe("advanced flow", function()
     truthy(res.ok, vim.inspect(res))
     eq(
       full_argv(f, "flow", { "#6", "--flow", "research,spec,impl,verify,commit" }),
-      f:call(1).argv
+      f:call(2).argv
     )
   end)
 
@@ -143,6 +153,7 @@ describe("advanced flow", function()
       inputs = { "impl,spec,commit" },
     })
     seed(source, st, { task("#6", "pending") })
+    f:respond("flow", { stdout = flow_response() })
 
     local res = await(function(cb)
       adv:flow("#6", cb)
@@ -150,7 +161,8 @@ describe("advanced flow", function()
 
     falsy(res.ok)
     eq("invalid", res.code)
-    eq(0, f:call_count())
+    eq(1, f:call_count())
+    eq(full_argv(f, "flow", { "--list", "--no-sync" }), f:call(1).argv)
     eq("impl,spec,commit", res.input)
     match(res.message, "顺序")
   end)
@@ -158,7 +170,7 @@ describe("advanced flow", function()
   it("clears a flow through --clear", function()
     local f, source, st, adv = harness({ pick = advanced_mod.CLEAR_FLOW })
     seed(source, st, { task("#6", "pending", { flow = "quick" }) })
-    f:respond("flow", { stdout = json(task("#6", "pending")) })
+    f:respond("flow", { stdout = flow_response() })
     f:respond("list", { stdout = list_response({ task("#6", "pending") }) })
 
     local res = await(function(cb)
@@ -166,12 +178,14 @@ describe("advanced flow", function()
     end)
 
     truthy(res.ok, vim.inspect(res))
-    eq(full_argv(f, "flow", { "#6", "--clear" }), f:call(1).argv)
+    eq(full_argv(f, "flow", { "--list", "--no-sync" }), f:call(1).argv)
+    eq(full_argv(f, "flow", { "#6", "--clear" }), f:call(2).argv)
   end)
 
   it("cancels without spawning when the picker is dismissed", function()
     local f, source, st, adv = harness({ pick = nil })
     seed(source, st, { task("#6", "pending") })
+    f:respond("flow", { stdout = flow_response() })
 
     local res = await(function(cb)
       adv:flow("#6", cb)
@@ -179,7 +193,8 @@ describe("advanced flow", function()
 
     falsy(res.ok)
     eq("cancelled", res.code)
-    eq(0, f:call_count())
+    eq(1, f:call_count())
+    eq(full_argv(f, "flow", { "--list", "--no-sync" }), f:call(1).argv)
   end)
 end)
 
@@ -397,6 +412,7 @@ describe("advanced failure handling", function()
     eq("remote", res.kind)
     eq({ "#5", "#6" }, ids(st.tasks))
     eq("#6", st:selected_id())
-    eq(1, f:call_count())
+    eq(2, f:call_count())
+    eq(full_argv(f, "flow", { "--list", "--no-sync" }), f:call(1).argv)
   end)
 end)

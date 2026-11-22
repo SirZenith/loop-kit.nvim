@@ -222,3 +222,115 @@ describe("advanced touch path helper", function()
     truthy(list_contains(advanced.FLOWS, "doc-to-tasks"))
   end)
 end)
+
+describe("advanced flow listing", function()
+  it("parses builtin and custom flows from flow --list payload", function()
+    local flows = advanced.flow_payload({
+      builtin = { "full", "quick" },
+      custom = { mine = { "spec", "impl", "commit" } },
+    })
+    eq({ "full", "quick" }, flows.builtin)
+    eq({ mine = { "spec", "impl", "commit" } }, flows.custom)
+    eq({ "full", "quick", "mine" }, advanced.flow_items(flows))
+  end)
+
+  it("accepts custom flows as an array of {name, stages}", function()
+    local flows = advanced.flow_payload({
+      builtin = { "quick" },
+      custom = { { name = "mine", stages = { "impl", "commit" } } },
+    })
+    eq({ "quick", "mine" }, advanced.flow_items(flows))
+  end)
+
+  it("falls back to builtin names when the payload is unusable", function()
+    local flows = advanced.flow_payload(nil)
+    eq(advanced.FLOWS, flows.builtin)
+    eq({}, flows.custom)
+  end)
+end)
+
+describe("advanced field setters", function()
+  local function make_advanced()
+    local calls = {}
+    local instance = advanced.new({
+      source = { client = {}, root = "/tmp/kv", snapshot = {} },
+      state = {
+        tasks = {},
+        enqueue = function(_, fn)
+          fn(function() end)
+        end,
+        set_tasks = function(_, list)
+          return list
+        end,
+      },
+      exec = function(command, args, _, cb)
+        calls[#calls + 1] = { command = command, args = args }
+        cb({ ok = true, data = { tasks = {} } })
+      end,
+      reload = function(cb)
+        cb({ ok = true, tasks = {} })
+      end,
+    })
+    return instance, calls
+  end
+
+  it("sets tag through edit", function()
+    local instance, calls = make_advanced()
+    instance:set_tag("#12", "bugfix", function() end)
+    eq("edit", calls[1].command)
+    eq({ "#12", "--tag", "bugfix" }, calls[1].args)
+  end)
+
+  it("sets and clears deps", function()
+    local instance, calls = make_advanced()
+    instance:set_deps("#12", { "#1", "#2" }, function() end)
+    eq({ "#12", "--set", "#1,#2" }, calls[1].args)
+    instance:set_deps("#12", {}, function() end)
+    eq({ "#12", "--set", "" }, calls[2].args)
+  end)
+
+  it("sets and clears doc", function()
+    local instance, calls = make_advanced()
+    instance:set_doc("#12", "docs/x.md", function() end)
+    eq("doc", calls[1].command)
+    eq({ "#12", "--path", "docs/x.md" }, calls[1].args)
+    instance:set_doc("#12", "", function() end)
+    eq({ "#12", "--clear" }, calls[2].args)
+  end)
+
+  it("sets prompts with their kebab-case flags", function()
+    local instance, calls = make_advanced()
+    instance:set_prompt("#12", "docTaskSplitPrompt", "拆分", function() end)
+    eq({ "#12", "--doc-task-split-prompt", "拆分" }, calls[1].args)
+    instance:set_prompt("#12", "specPrompt", "", function() end)
+    eq({ "#12", "--spec-prompt", "" }, calls[2].args)
+  end)
+
+  it("rejects unknown prompt fields", function()
+    local instance, calls = make_advanced()
+    local result
+    instance:set_prompt("#12", "nope", "x", function(res)
+      result = res
+    end)
+    eq(0, #calls)
+    eq("invalid", result.code)
+  end)
+
+  it("sets and clears flow", function()
+    local instance, calls = make_advanced()
+    instance:set_flow("#12", "quick", function() end)
+    eq("flow", calls[1].command)
+    eq({ "#12", "--flow", "quick" }, calls[1].args)
+    instance:set_flow("#12", "", function() end)
+    eq({ "#12", "--clear" }, calls[2].args)
+  end)
+
+  it("sets and clears touch", function()
+    local instance, calls = make_advanced()
+    instance:set_touch("#12", { "lua/a.lua", "tests/a_spec.lua" }, function() end)
+    eq("touch", calls[1].command)
+    eq({ "#12", "--set", "lua/a.lua", "tests/a_spec.lua" }, calls[1].args)
+    instance:set_touch("#12", {}, function() end)
+    eq({ "#12", "--clear" }, calls[2].args)
+  end)
+end)

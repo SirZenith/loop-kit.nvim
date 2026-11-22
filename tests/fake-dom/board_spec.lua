@@ -110,4 +110,24 @@ describe("board edit mode", function()
     eq(board.detail_buf, vim.api.nvim_win_get_buf(board.detail_win))
     truthy(vim.tbl_contains(lines(board.list_buf), ""))
   end)
+
+  it("returns to the touch field after a multi-line save", function()
+    local board, fake, state = open_board()
+    fake:respond("touch", {
+      stdout = json({ task = { id = "#11", title = "看板编辑", status = "pending" } }),
+    })
+    local task = state:selected()
+    board:_begin_edit({ kind = "touch" }, task, "lua/a.lua", false)
+    local edit_buf = board.editing.handle.buf
+    vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, { "lua/a.lua", "tests/a_spec.lua" })
+    vim.api.nvim_buf_call(edit_buf, function()
+      vim.cmd("write")
+    end)
+
+    vim.wait(5000, function()
+      return board.editing == nil
+    end, 10)
+    eq(board.detail_buf, vim.api.nvim_win_get_buf(board.detail_win))
+    eq(board.detail.rendered.fields.touch, vim.api.nvim_win_get_cursor(board.detail_win)[1])
+  end)
 end)

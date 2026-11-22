@@ -20,6 +20,7 @@ local function make_task(overrides)
       ["a.b"] = "外部阶段",
     },
     flow = "quick",
+    private = false,
     touch = { "lua/loop-kit/edit.lua" },
   }
   for key, value in pairs(overrides or {}) do
@@ -69,10 +70,43 @@ describe("edit.target_at", function()
     })
     local fields = rendered.fields
 
-    eq({ kind = "readonly" }, edit.target_at(rendered, fields.id))
-    eq({ kind = "readonly" }, edit.target_at(rendered, fields.status))
-    eq({ kind = "readonly" }, edit.target_at(rendered, fields.decide))
-    eq({ kind = "readonly" }, edit.target_at(rendered, fields.analysis))
+    for _, line in ipairs({
+      fields.id,
+      fields.status,
+      fields.private,
+      fields.meta,
+      fields.decide,
+      fields.analysis,
+    }) do
+      local target = edit.target_at(rendered, line)
+      eq("readonly", target.kind)
+      truthy(target.message and target.message ~= "", "readonly lines need a hint")
+    end
+  end)
+
+  it("maps key/value metadata lines to their own editors", function()
+    local task = make_task()
+    local rendered = render.detail(task, { tasks_by_id = { [task.id] = task } })
+    local fields = rendered.fields
+
+    for _, name in ipairs(edit.KV_FIELDS) do
+      eq({ kind = name }, edit.target_at(rendered, fields[name]))
+    end
+    eq({ kind = "touch" }, edit.target_at(rendered, fields.touch))
+    -- Child path lines belong to the touch field.
+    eq({ kind = "touch" }, edit.target_at(rendered, fields.touch + 1))
+  end)
+
+  it("explains lifecycle-only lines", function()
+    local task = make_task()
+    local rendered = render.detail(task, { tasks_by_id = { [task.id] = task } })
+    local fields = rendered.fields
+
+    for _, line in ipairs({ fields.origin, fields.openAt, fields.closedAt, fields.hash }) do
+      local target = edit.target_at(rendered, line)
+      eq("readonly", target.kind)
+      truthy(target.message and target.message ~= "", "lifecycle lines need a hint")
+    end
   end)
 
   it("maps empty placeholders to their editable targets", function()

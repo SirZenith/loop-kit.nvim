@@ -383,46 +383,54 @@ function Advanced:flow(id, cb)
   if not id then
     return self:_invalid(cb, "flow", id, "任务 id 不合法")
   end
-  local items = vim.list_extend(vim.deepcopy(M.FLOWS), { M.CUSTOM_FLOW, M.CLEAR_FLOW })
-  self.select(items, { prompt = "流程" }, function(choice)
-    if choice == nil then
-      return self:_cancel(cb, "flow", id)
+  self:list_flows(function(flows)
+    if not flows then
+      self.notify("读取流程列表失败，使用内置流程")
+      flows = { builtin = vim.deepcopy(M.FLOWS), custom = {} }
     end
-    if choice == M.CLEAR_FLOW then
-      return self:_submit("flow", id, "flow", { id, "--clear" }, {}, cb)
-    end
-    if choice == M.CUSTOM_FLOW then
-      return self.input(
-        "stage 列表（逗号分隔，必须以 commit 收尾）：",
-        function(raw)
-          if raw == nil then
-            return self:_cancel(cb, "flow", id)
+    local items = M.flow_items(flows)
+    items[#items + 1] = M.CUSTOM_FLOW
+    items[#items + 1] = M.CLEAR_FLOW
+    self.select(items, { prompt = "流程" }, function(choice)
+      if choice == nil then
+        return self:_cancel(cb, "flow", id)
+      end
+      if choice == M.CLEAR_FLOW then
+        return self:_submit("flow", id, "flow", { id, "--clear" }, {}, cb)
+      end
+      if choice == M.CUSTOM_FLOW then
+        return self.input(
+          "stage 列表（逗号分隔，必须以 commit 收尾）：",
+          function(raw)
+            if raw == nil then
+              return self:_cancel(cb, "flow", id)
+            end
+            local stages = M.split_stages(raw)
+            local ok, value = M.validate_stages(stages)
+            if not ok then
+              return cb({
+                ok = false,
+                action = "flow",
+                id = id,
+                code = "invalid",
+                kind = "usage",
+                message = value,
+                input = raw,
+              })
+            end
+            self:_submit(
+              "flow",
+              id,
+              "flow",
+              { id, "--flow", table.concat(value, ",") },
+              { input = raw },
+              cb
+            )
           end
-          local stages = M.split_stages(raw)
-          local ok, value = M.validate_stages(stages)
-          if not ok then
-            return cb({
-              ok = false,
-              action = "flow",
-              id = id,
-              code = "invalid",
-              kind = "usage",
-              message = value,
-              input = raw,
-            })
-          end
-          self:_submit(
-            "flow",
-            id,
-            "flow",
-            { id, "--flow", table.concat(value, ",") },
-            { input = raw },
-            cb
-          )
-        end
-      )
-    end
-    self:_submit("flow", id, "flow", { id, "--flow", choice }, { input = choice }, cb)
+        )
+      end
+      self:_submit("flow", id, "flow", { id, "--flow", choice }, { input = choice }, cb)
+    end)
   end)
 end
 
@@ -545,6 +553,159 @@ function Advanced:meta(id, cb)
       end)
     end)
   end)
+end
+
+--- Normalize `flow --list` output into { builtin = {...}, custom = {name=stages} }.
+function M.flow_payload(payload)
+  payload = type(payload) == "table" and payload or {}
+  local builtin = {}
+  if type(payload.builtin) == "table" then
+    for _, name in ipairs(payload.builtin) do
+      if type(name) == "string" and name ~= "" then
+        builtin[#builtin + 1] = name
+      end
+    end
+  end
+  if #builtin == 0 then
+    builtin = vim.deepcopy(M.FLOWS)
+  end
+  local custom = {}
+  local raw = payload.custom
+  if type(raw) == "table" then
+    if #raw > 0 then
+      for _, entry in ipairs(raw) do
+        if type(entry) == "table" and entry.name ~= nil then
+          custom[tostring(entry.name)] = entry.stages or {}
+        elseif type(entry) == "string" then
+          custom[entry] = {}
+        end
+      end
+    else
+      for name, stages in pairs(raw) do
+        custom[tostring(name)] = stages
+      end
+    end
+  end
+  return { builtin = builtin, custom = custom }
+end
+
+--- Flow names in a stable order: builtin first, then custom names sorted.
+function M.flow_items(flows)
+  local items = {}
+  for _, name in ipairs(flows and flows.builtin or {}) do
+    items[#items + 1] = name
+  end
+  local custom = {}
+  for name in pairs(flows and flows.custom or {}) do
+    custom[#custom + 1] = name
+  end
+  table.sort(custom)
+  for _, name in ipairs(custom) do
+    items[#items + 1] = name
+  end
+  return items
+end
+
+--- Read builtin and custom flows. cb({builtin,custom}, err).
+function Advanced:list_flows(cb)
+  self.exec("flow", { "--list", "--no-sync" }, {}, function(res)
+    if not res or not res.ok then
+      return cb(nil, res)
+    end
+    cb(M.flow_payload(res.data), res)
+  end)
+end
+
+--- Set `tag` through `edit <id> --tag`.
+function Advanced:set_tag(id, value, cb)
+  id = util.normalize_id(id)
+  if not id then
+    return self:_invalid(cb, "tag", id, "任务 id 不合法")
+  end
+  self:_submit("tag", id, "edit", { id, "--tag", tostring(value) }, { value = value }, cb)
+end
+
+--- Replace `deps` with `deps <id> --set a,b` (`--set ''` clears it).
+function Advanced:set_deps(id, values, cb)
+  id = util.normalize_id(id)
+  if not id then
+    return self:_invalid(cb, "deps", id, "任务 id 不合法")
+  end
+  local list = {}
+  for _, value in ipairs(values or {}) do
+    list[#list + 1] = tostring(value)
+  end
+  local arg = table.concat(list, ",")
+  self:_submit("deps", id, "deps", { id, "--set", arg }, { deps = list }, cb)
+end
+
+--- Set or clear `doc` (`doc <id> --path` / `--clear`).
+function Advanced:set_doc(id, value, cb)
+  id = util.normalize_id(id)
+  if not id then
+    return self:_invalid(cb, "doc", id, "任务 id 不合法")
+  end
+  value = tostring(value or "")
+  if value == "" then
+    return self:_submit("doc", id, "doc", { id, "--clear" }, { value = "" }, cb)
+  end
+  self:_submit("doc", id, "doc", { id, "--path", value }, { value = value }, cb)
+end
+
+local PROMPT_FLAGS = {
+  docParent = "--doc-parent",
+  specPrompt = "--spec-prompt",
+  researchPrompt = "--research-prompt",
+  codePrompt = "--code-prompt",
+  verifyPrompt = "--verify-prompt",
+  docTaskSplitPrompt = "--doc-task-split-prompt",
+}
+
+M.PROMPT_FLAGS = PROMPT_FLAGS
+
+--- Set a string field through `edit <id> --<flag>`; an empty string clears it.
+function Advanced:set_prompt(id, field, value, cb)
+  id = util.normalize_id(id)
+  if not id then
+    return self:_invalid(cb, "prompt", id, "任务 id 不合法")
+  end
+  local flag = PROMPT_FLAGS[field]
+  if not flag then
+    return self:_invalid(cb, "prompt", id, "未知的字段：" .. tostring(field))
+  end
+  value = tostring(value or "")
+  self:_submit("prompt", id, "edit", { id, flag, value }, { field = field, value = value }, cb)
+end
+
+--- Set `flow` from a raw name or comma-separated stage list; empty clears it.
+function Advanced:set_flow(id, value, cb)
+  id = util.normalize_id(id)
+  if not id then
+    return self:_invalid(cb, "flow", id, "任务 id 不合法")
+  end
+  value = tostring(value or "")
+  if value == "" then
+    return self:_submit("flow", id, "flow", { id, "--clear" }, { value = "" }, cb)
+  end
+  self:_submit("flow", id, "flow", { id, "--flow", value }, { value = value }, cb)
+end
+
+--- Replace `touch` with `touch <id> --set ...` (`--clear` for an empty list).
+function Advanced:set_touch(id, paths, cb)
+  id = util.normalize_id(id)
+  if not id then
+    return self:_invalid(cb, "touch", id, "任务 id 不合法")
+  end
+  local list = {}
+  for _, path in ipairs(paths or {}) do
+    list[#list + 1] = tostring(path)
+  end
+  if #list == 0 then
+    return self:_submit("touch", id, "touch", { id, "--clear" }, { paths = list }, cb)
+  end
+  local args = { id, "--set" }
+  vim.list_extend(args, list)
+  self:_submit("touch", id, "touch", args, { paths = list }, cb)
 end
 
 return M

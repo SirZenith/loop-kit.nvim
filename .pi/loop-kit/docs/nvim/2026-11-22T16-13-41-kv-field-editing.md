@@ -3,7 +3,7 @@ task_id: "#12"
 summary: 键值字段分级编辑：tag/flow 单选、deps 多选、路径输入、touch 多行编辑，只读字段给出提示。
 module: nvim
 tag: feature
-status: spec
+status: archived
 updated: 2026-11-22
 verification_levels: [unit, fake-dom]
 doc_ref: .pi/loop-kit/docs/nvim/2026-11-22T15-18-00-per-field-edit-mode.md
@@ -58,7 +58,9 @@ doc_ref: .pi/loop-kit/docs/nvim/2026-11-22T15-18-00-per-field-edit-mode.md
 ### 模块划分
 
 - `lua/loop-kit/kv.lua`（新增）：纯函数与无副作用读取。
-  - `M.parse_tags(lines)`：从 `# 任务分类（tag）` 小节收集反引号开头的列表项；
+  - `M.parse_tags(content)`：从 `# 任务分类（tag）` 小节收集形如 `- \`tag\`` 的列表项；
+    `edit.lua` 的 `tag_list`（带 mtime 缓存）在缓存失效时直接调用 `kv.tag_values`，
+    解析与回退只有一份实现；
   - `M.tag_values(loop_root)`：读取 `<loop_root>/TARGETS.md`，失败或空结果回退
     `feature/bugfix/refactor/ux/visual/docs/chore`；
   - `M.would_cycle(tasks, id, candidate)`：沿 `candidate` 的 deps 做 DFS，判断是否能回到 `id`；
@@ -72,7 +74,8 @@ doc_ref: .pi/loop-kit/docs/nvim/2026-11-22T15-18-00-per-field-edit-mode.md
     便于单测；键位 `<Space>` 切换、`j`/`k` 与 `<C-n>`/`<C-p>` 移动、`<CR>` 确认、`<Esc>`/`q` 取消；
     底部显示 `已隐藏 N 项（自身或循环依赖）`。
 - `lua/loop-kit/edit.lua`（#11 新增，本条目扩展）：
-  - `target_at` 增加 `kv` 与更细的 `readonly` 目标；
+  - `target_at` 按字段返回各自的 kind（`tag`/`deps`/`doc`/`docParent`/各 prompt/`flow`）
+    与更细的 `readonly` 目标；
   - 增加 `touch` 多行 buffer 目标，内容为每行一个路径。
 - `lua/loop-kit/advanced.lua`（扩展）：新增 `set_tag` / `set_deps` / `set_doc` / `set_prompt` /
   `list_flows` / `set_touch`，并把 `flow` 改为动态候选；保留现有 `FLOWS` 作为离线回退。
@@ -86,17 +89,17 @@ doc_ref: .pi/loop-kit/docs/nvim/2026-11-22T15-18-00-per-field-edit-mode.md
 
 | `fields` 键 | 目标 | 编辑器 | 写入命令 |
 | --- | --- | --- | --- |
-| `tag` | `kv` | 单选 | `edit <id> --tag <v>` |
-| `deps` | `kv` | 多选 | `deps <id> --set 'a,b'` / `--set ''` |
-| `doc` | `kv` | 简单输入 | `doc <id> --path <v>` / `--clear` |
-| `docParent` | `kv` | 简单输入 | `edit <id> --doc-parent <v>` |
-| `specPrompt` | `kv` | 简单输入 | `edit <id> --spec-prompt <v>` |
-| `researchPrompt` | `kv` | 简单输入 | `edit <id> --research-prompt <v>` |
-| `codePrompt` | `kv` | 简单输入 | `edit <id> --code-prompt <v>` |
-| `verifyPrompt` | `kv` | 简单输入 | `edit <id> --verify-prompt <v>` |
-| `docTaskSplitPrompt` | `kv` | 简单输入 | `edit <id> --doc-task-split-prompt <v>` |
-| `flow` | `kv` | 单选 + 自定义 | `flow <id> --flow <名\|stage,stage>` / `--clear` |
-| `touch` | `buffer` | 多行文本 | `touch <id> --set <p...>` / `--clear` |
+| `tag` | `tag` | 单选 | `edit <id> --tag <v>` |
+| `deps` | `deps` | 多选 | `deps <id> --set 'a,b'` / `--set ''` |
+| `doc` | `doc` | 简单输入 | `doc <id> --path <v>` / `--clear` |
+| `docParent` | `docParent` | 简单输入 | `edit <id> --doc-parent <v>` |
+| `specPrompt` | `specPrompt` | 简单输入 | `edit <id> --spec-prompt <v>` |
+| `researchPrompt` | `researchPrompt` | 简单输入 | `edit <id> --research-prompt <v>` |
+| `codePrompt` | `codePrompt` | 简单输入 | `edit <id> --code-prompt <v>` |
+| `verifyPrompt` | `verifyPrompt` | 简单输入 | `edit <id> --verify-prompt <v>` |
+| `docTaskSplitPrompt` | `docTaskSplitPrompt` | 简单输入 | `edit <id> --doc-task-split-prompt <v>` |
+| `flow` | `flow` | 单选 + 自定义 | `flow <id> --flow <名\|stage,stage>` / `--clear` |
+| `touch` | `touch`（多行 buffer） | 多行文本 | `touch <id> --set <p...>` / `--clear` |
 | `origin` | `readonly` | — | 提示“由 origin:* 标签维护” |
 | `openAt` / `closedAt` | `readonly` | — | 提示“由 issue 时间戳或生命周期维护” |
 | `hash` | `readonly` | — | 提示“由 done --hash 在完成时设置” |
@@ -112,7 +115,8 @@ doc_ref: .pi/loop-kit/docs/nvim/2026-11-22T15-18-00-per-field-edit-mode.md
   - `--list` 失败（离线/旧版 CLI）时回退到 `M.FLOWS` 并 `notify` 一次；
   - 选内置名或自定义 flow 名 → `flow <id> --flow <name>`；
   - 选“自定义” → `input` 输入逗号分隔列表，`M.split_stages` + `M.validate_stages` 就地校验，
-    通过后传原始逗号串给 `--flow`（CLI 会归一成档位名或 stage 数组，与 UI 行为一致）；
+    通过后传规范化后的逗号串（`table.concat(validated, ",")`，去掉空白；原始输入仅用于错误消息）
+    给 `--flow`（CLI 会归一成档位名或 stage 数组，与 UI 行为一致）；
   - 选“清除” → `flow <id> --clear`；
   - 当前值不在候选（例如已是自定义 stage 数组）时置顶追加只读项，选中即无修改。
 
@@ -186,6 +190,9 @@ tests/fake-dom/board_spec.lua
 
 ## 验收标准
 
+> 注：`edit.target_at` 返回逐字段 kind（而非统一的 `kv`）；自定义 flow 传给 CLI 的是
+> `validate_stages` 规范化后的逗号串。
+
 - [单测] `tests/unit/kv_spec.lua`：`parse_tags` 只收集 `# 任务分类（tag）` 到下一个一级标题之间的反引号
   列表项；缺文件、空集合、小节缺失都回退内置 7 项；当前 tag 不在候选时 `select_one` 的候选末尾包含它。
 - [单测] `tests/unit/kv_spec.lua`：`would_cycle` 对自身、直接依赖、A→B→C 传递依赖返回真，对无关任务与
@@ -195,19 +202,21 @@ tests/fake-dom/board_spec.lua
   `touch_paths` 去空行、trim、保序去重，且保留含空格的路径。
 - [单测] `tests/unit/picker_spec.lua`：多选模型 `toggle` 只翻转当前行、`move` 在首尾环绕、
   `result` 按候选顺序返回选中值；隐藏计数不参与选中结果。
-- [单测] `tests/unit/advanced_spec.lua`：`list_flows` 解析 `{builtin, custom}` 并生成“内置 + 自定义 +
-  自定义 stage + 清除”的候选；`--list` 失败时回退 `M.FLOWS`；`flow` 选择自定义输入
-  `"research, impl, commit"` 时传给 CLI 的是原始串，非法列表不产生写调用。
-- [单测] `tests/unit/advanced_spec.lua`：`set_tag` 生成 `edit <id> --tag <v>`；未变化时不发命令；
+- [单测] `tests/unit/advanced_spec.lua`：`list_flows` 解析 `{builtin, custom}` 并可由 `flow_items`
+  拼出“内置 + 自定义 + 自定义 stage + 清除”的候选；`--list` 失败时 Board 回退 `M.FLOWS` 并提示；
+  `flow` 选择自定义输入 `"research, impl, commit"` 时传给 CLI 的是规范化后的逗号串，非法列表不产生写调用。
+- [单测] `tests/unit/advanced_spec.lua`：`set_tag` 生成 `edit <id> --tag <v>`；
   `set_deps` 生成 `deps <id> --set 'a,b'`，空集合为 `--set ""`；`set_doc` 空串走 `--clear`、
   非空走 `--path`；`set_prompt` 空串仍带 flag 与空值；`set_touch` 空列表走 `--clear`，
-  非空时每个路径一个 argv。
-- [单测] `tests/unit/edit_spec.lua`：`target_at` 把上表 11 个可编辑字段映射为 `kv`/`buffer`，
-  把 `origin/openAt/closedAt/hash/status/id/private/meta` 与 decide/analysis 映射为 `readonly`
-  并带非空 message；`- touch:` 行与其子行都归入 `touch` buffer。
+  非空时每个路径一个 argv。Board 在 tag/flow 选中当前值、deps 集合未变化时不发写命令。
+- [单测] `tests/unit/edit_spec.lua`：`target_at` 把上表 11 个可编辑字段映射为各自的字段 kind
+  （`touch` 为多行 buffer），把 `origin/openAt/closedAt/hash/status/id/private/meta` 与
+  decide/analysis 映射为 `readonly` 并带非空 message；`- touch:` 行与其子行都归入 `touch` buffer。
 - [假 DOM] `tests/fake-dom/kv_spec.lua`：在 tag 行按 `e` 调用注入的 `select`，候选中包含当前值并带
   当前标记；在 deps 行按 `e` 调用注入的 `multi`，参数里隐藏计数等于被排除任务数、已选集合等于当前 deps；
-  在 `origin` 行按 `e` 只 `notify`，不启动写队列。
+  在 `origin` 行按 `e` 只 `notify`，不启动写队列；`flow` 行的候选含内置、自定义 flow、
+  “自定义 stage”与“清除”，`--list` 失败时回退内置并提示，选择当前 flow 或输入非法自定义
+  stage 列表时不写。
 - [假 DOM] `tests/fake-dom/kv_spec.lua`：`doc` 输入取消不发命令；输入新路径产生
   `doc <id> --path <v>` 并刷新；`touch` buffer 写入两行路径后保存产生
   `touch <id> --set <p1> <p2>`；写入绝对路径时保留 buffer 脏并显示错误，且写队列为空。
