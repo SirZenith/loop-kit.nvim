@@ -151,6 +151,44 @@
       "doc": ".pi/loop-kit/docs/nvim/2026-11-22T13-08-46-ui-display-style.md",
       "hash": "cf4c0ad",
       "flow": "quick"
+    },
+    "#11": {
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-22T15-18-00-per-field-edit-mode.md",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/ui/board.lua",
+        "lua/loop-kit/ui/list.lua",
+        "lua/loop-kit/ui/detail.lua",
+        "lua/loop-kit/ui/help.lua",
+        "lua/loop-kit/edit.lua",
+        "lua/loop-kit/actions.lua",
+        "lua/loop-kit/init.lua",
+        "lua/loop-kit/form.lua",
+        "doc/loop-kit.txt",
+        "tests"
+      ]
+    },
+    "#12": {
+      "deps": [
+        "#11"
+      ],
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-22T16-13-41-kv-field-editing.md",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/kv.lua",
+        "lua/loop-kit/ui/picker.lua",
+        "lua/loop-kit/edit.lua",
+        "lua/loop-kit/advanced.lua",
+        "lua/loop-kit/ui/board.lua",
+        "lua/loop-kit/ui/help.lua",
+        "doc/loop-kit.txt",
+        "tests/unit/kv_spec.lua",
+        "tests/unit/picker_spec.lua",
+        "tests/unit/advanced_spec.lua",
+        "tests/unit/edit_spec.lua",
+        "tests/fake-dom/kv_spec.lua",
+        "tests/fake-dom/board_spec.lua"
+      ]
     }
   }
 }
