@@ -3,7 +3,7 @@ task_id: "#11"
 summary: "看板按光标位置的字段级编辑模式：标题/阶段名走简单输入，描述与提示词走 acwrite 编辑 buffer；移除整表单。"
 module: nvim
 tag: feature
-status: spec
+status: archived
 updated: 2026-11-22
 verification_levels: [unit, fake-dom, render]
 deferred_levels: [manual]

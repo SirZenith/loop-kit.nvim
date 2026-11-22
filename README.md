@@ -83,8 +83,8 @@ Plug 'https://git.dispersion.cc/Dispersion/loop-kit.nvim.git'
 | --- | --- |
 | `:LoopKit` / `:LoopKit open [path]` | 打开或聚焦当前项目的看板 |
 | `:LoopKit show #12` | 打开看板，选中任务并聚焦详情窗 |
-| `:LoopKit edit #12` | 打开该任务的编辑表单 |
-| `:LoopKit add` | 打开新增任务表单 |
+| `:LoopKit edit #12` | 选中任务并按光标位置进入字段编辑 |
+| `:LoopKit add` | 依次输入标题与 tag 后新增任务 |
 | `:LoopKit sync` | 完整执行 `loop-cli list`（远端源会访问网络） |
 | `:LoopKit refresh` | 只读取缓存/本地状态，不联网 |
 | `:LoopKit remove #12` | 确认后删除 local 任务或把远端任务移出循环 |
@@ -110,7 +110,8 @@ Plug 'https://git.dispersion.cc/Dispersion/loop-kit.nvim.git'
 | `d` | done（受依赖门禁约束） |
 | `D` | 确认后强制 done（显式追加 `--force`） |
 | `b` | 输入非空原因并 block |
-| `e` / `a` | 编辑当前任务 / 新增任务 |
+| `e` | 编辑光标处的字段（标题/描述/提示词/阶段名） |
+| `a` | 新建任务（输入标题与分类 tag） |
 | `x` | 删除或移出当前任务（始终先确认） |
 | `o` | 用 `:edit` 打开任务的 `doc`（相对项目根解析） |
 | `F` / `P` / `T` / `M` | flow / private / touch / worktree meta |
@@ -123,7 +124,7 @@ Plug 'https://git.dispersion.cc/Dispersion/loop-kit.nvim.git'
 doing → pending → blocked → done 分组。详情窗里也可使用 `q`、`?`、`o`、`e`。
 
 同一项目的写操作串行执行（FIFO）；切换筛选和只读刷新不会被写请求阻塞，但写完成前
-不会用旧列表覆盖成功响应。写失败保留当前选中、筛选与表单内容。
+不会用旧列表覆盖成功响应。写失败保留当前选中、筛选与编辑内容。
 
 ## 配置
 
@@ -161,46 +162,40 @@ require("loop-kit").setup({
 `flow`、`private`、`touch`、`meta`、`decide`、`help`、`close`。插件不写任何全局
 键位。
 
-## 表单格式契约
+## 字段级编辑
 
-`e` / `a` 在详情窗打开 `buftype=acwrite` 的 Markdown buffer，`:w` 由
-`BufWriteCmd` 接管，捕获后走 `loop-cli`，不会写本地文件。buffer 名形如
-`loopkit://<root>/task/%2312` 与 `loopkit://<root>/new/<nonce>`。
+`e` 按当前窗口与光标位置选择目标；列表窗始终编辑 `desc`。详情窗使用
+`render.detail` 的字段锚点（不做 Markdown 扫描）：
 
-```markdown
-<!-- loopkit:task id=#12 -->
-# 任务标题
+- 标题 / 阶段标题 → 单行 input。
+- 描述 / 用户提示词 / 阶段正文 → `buftype=acwrite` 的 Markdown buffer。
+- “各阶段提示词”的空位 → 先输入阶段名。
+- 元数据与 analysis → 拒绝，并提示“该行暂不支持编辑”。
 
-<!-- loopkit:meta
-tag: feature
-deps: #3, #5
-doc: loop/docs/example.md
--->
+编辑 buffer 名为 `loopkit://<root>/edit/<encoded-id>/<target>[/<stage>]`
+（`#` 编码为 `%23`），设置 `filetype=markdown`、`swapfile=false`。`:w` 由
+`BufWriteCmd` 从 stdin 交给 `loop-cli`，不写本地文件；失败保留 dirty 并提示。
+normal 模式 `<Esc>` / `<C-c>` 退出：干净时直接关闭，dirty 时询问
+“放弃未保存的修改？”（放弃修改 / 继续编辑）。编辑期间列表显示静态信息栏，
+其它任务动作被忽略；`?` 仍可打开帮助，`q` 先退出编辑。
 
-这里是描述 Markdown。
+阶段名规则：
 
-可以有多段、列表与代码块。
-```
+- 内建 `research` / `spec` / `json-task-split` / `doc-task-split` /
+  `decision-question` / `impl` / `verify` / `commit`，或非空且含 `.` 的外部名；
+  空白、含空格或其它未知名称拒绝。
+- 新建重名 → 询问是否直接编辑已有阶段；改名撞名 → 拒绝并保持编辑。
+- 阶段名改为空 → 确认后删除整条。
+- 删除发送 `--stage-prompt <stage>=`；改名发送
+  `--stage-prompt-file <new>=-` 与 `--stage-prompt <old>=`。
 
-规则：
+`a` 依次输入标题与分类 `tag`（默认 `feature`）。tag 必须属于
+`<loopRoot>/TARGETS.md` 的「任务分类（tag）」集合（解析失败回退
+`feature`/`bugfix`/`refactor`/`ux`/`visual`/`docs`/`chore`），然后执行
+`add --title T --tag X --json`；任一步取消或 tag 非法都不调用 CLI。
 
-- 首个任务注释保存 id；新增表单使用 `<!-- loopkit:task new -->`。
-- 第一个一级标题是 `title`，必填且单行；其余标题留在 desc 中，不会被当成字段。
-- 唯一的 `loopkit:meta` 注释块接受 `tag` / `deps` / `doc`。未知键、重复键、
-  非法 id 与非法路径在调用 CLI 前报错并标出行号。`doc` 必须是仓库根相对路径，
-  不得以 `/`、盘符开头，也不得包含 `..` 或换行。
-- meta 块之后的全部文本是 desc（没有 meta 块时从一级标题之后开始），保留多段
-  与 Markdown 结构。
-- deps 用逗号分隔并规范化为 `#n`；清空用 `deps --set ''`，清空 doc 用
-  `doc --clear`。新增时为空则不发送对应参数。
-- 以打开时的任务为 baseline 做字段 diff，只提交实际变化的字段；desc 通过
-  `--desc-file -` 从 stdin 写入，不经过 shell。
-- 表单不发送 `status`、`flow`、`private`、`touch`、`meta`；这些字段各有独立命令
-  （`d`/`D`/`b` 与 `F`/`P`/`T`/`M`），避免绕过依赖门禁与 closedAt/hash 语义。
-- 保存成功后才清除 `modified`、更新 baseline 并恢复详情；失败保持 dirty 与原文。
-  对 dirty 表单执行取消、关闭或重新打开时会询问保存/放弃/取消，放弃必须显式选择。
-- 表单 buffer 设置 `b:loopkit_form`；即使存在 format-on-save 一类 `BufWritePre`
-  钩子，也只通过 `BufWriteCmd` 提交一次。
+编辑只提交当前字段，不发送 `status`/`flow`/`private`/`touch`/`meta`；
+它们各有独立命令。
 
 ## provider 矩阵与写入语义
 
@@ -219,7 +214,7 @@ doc: loop/docs/example.md
 
 - 写操作可能因远端乐观并发（`updatedAt` 变化）被拒绝（CLI 退出码 `4`，且信息指向
   并发/冲突）。插件不自动重试、不合并、不覆盖。
-- 冲突时保留 dirty 表单和用户输入，提示先同步再人工核对。
+- 冲突时保留 dirty 编辑内容和用户输入，提示先同步再人工核对。
 - `done` 被依赖门禁拒绝时展示未完成依赖，不自动 force；只有 `D`（确认后）会追加
   `--force`。
 - 退出码 `5`（网络/权限等远端失败）只显示诊断并保留旧快照，可重试 `:LoopKit sync`。
@@ -322,9 +317,9 @@ LOOP_KIT_REAL_CLI=1 nvim --headless -u tests/minimal_init.lua -l tests/run.lua -
 git diff --check
 ```
 
-- `unit`：纯函数与契约（argv、路径、状态、表单 diff 等）。
+- `unit`：纯函数与契约（argv、路径、状态、字段目标解析、命令拼装等）。
 - `fake-dom`：用 `tests/fixtures/fake-loop-cli` 记录 argv/stdin，断言精确命令与失败分支。
-- `render`：在真实 headless buffer/window 中验证布局、导航、筛选与表单生命周期。
+- `render`：在真实 headless buffer/window 中验证布局、导航、筛选与编辑 buffer 生命周期。
 - `integration`：公开命令/API、健康检查与可选的真实 local CLI 闭环。
 - `LOOP_KIT_REAL_CLI=1` 才会运行真实 CLI 用例；未设置时该用例显示为 skip。
 

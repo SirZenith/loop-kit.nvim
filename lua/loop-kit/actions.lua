@@ -55,6 +55,7 @@ function M.new(opts)
   self.state = assert(opts.state, "loop-kit.actions: state is required")
   self.client = opts.client or (self.source and self.source.client)
   self.root = opts.root or (self.client and self.client.project_root)
+  self.loop_root = opts.loop_root
   if self.client and self.root and (not self.client.project_root or self.client.project_root == "") then
     self.client.project_root = self.root
   end
@@ -328,7 +329,11 @@ function Actions:_submit(action, id, command, args, extra, cb)
       end
     end
 
-    local ok, err = pcall(self.exec, command, args, {}, function(res)
+    local run_opts = {}
+    if type(extra) == "table" and extra.stdin ~= nil then
+      run_opts.stdin = extra.stdin
+    end
+    local ok, err = pcall(self.exec, command, args, run_opts, function(res)
       if finished then
         return
       end
@@ -509,6 +514,135 @@ function Actions:remove(id, opts, cb)
       return
     end
     self:_settle({ ok = false, action = "remove", id = id, code = "cancelled", message = "已取消" }, cb)
+  end)
+end
+
+local function normalize_text(text)
+  if text == nil then
+    return ""
+  end
+  return tostring(text)
+end
+
+--- Rename a task through a single-line edit.
+function Actions:edit_title(id, title, cb)
+  cb = cb or noop
+  id = util.normalize_id(id)
+  if not id then
+    self:_settle(self:_invalid("edit", id), cb)
+    return
+  end
+  if type(title) ~= "string" or title == "" then
+    self:_settle(self:_invalid("edit", id, "任务标题不允许为空"), cb)
+    return
+  end
+  self:_submit("edit", id, "edit", { id, "--title", title }, {}, function(res)
+    self:_settle(res, cb)
+  end)
+end
+
+--- Replace the task description through stdin.
+function Actions:edit_desc(id, text, cb)
+  cb = cb or noop
+  id = util.normalize_id(id)
+  if not id then
+    self:_settle(self:_invalid("edit", id), cb)
+    return
+  end
+  self:_submit("edit", id, "edit", { id, "--desc-file", "-" }, { stdin = normalize_text(text) }, function(res)
+    self:_settle(res, cb)
+  end)
+end
+
+--- Replace the user prompt through stdin.
+function Actions:edit_user_prompt(id, text, cb)
+  cb = cb or noop
+  id = util.normalize_id(id)
+  if not id then
+    self:_settle(self:_invalid("edit", id), cb)
+    return
+  end
+  self:_submit("edit", id, "edit", { id, "--user-prompt-file", "-" }, { stdin = normalize_text(text) }, function(res)
+    self:_settle(res, cb)
+  end)
+end
+
+--- Create or replace a single stage prompt through stdin.
+function Actions:set_stage_prompt(id, stage, text, cb)
+  cb = cb or noop
+  id = util.normalize_id(id)
+  if not id then
+    self:_settle(self:_invalid("edit", id), cb)
+    return
+  end
+  if type(stage) ~= "string" or stage == "" then
+    self:_settle(self:_invalid("edit", id, "阶段名不能为空"), cb)
+    return
+  end
+  self:_submit("edit", id, "edit", { id, "--stage-prompt-file", stage .. "=-" }, { stdin = normalize_text(text) }, function(res)
+    self:_settle(res, cb)
+  end)
+end
+
+--- Remove one stage prompt entry.
+function Actions:delete_stage_prompt(id, stage, cb)
+  cb = cb or noop
+  id = util.normalize_id(id)
+  if not id then
+    self:_settle(self:_invalid("edit", id), cb)
+    return
+  end
+  if type(stage) ~= "string" or stage == "" then
+    self:_settle(self:_invalid("edit", id, "阶段名不能为空"), cb)
+    return
+  end
+  self:_submit("edit", id, "edit", { id, "--stage-prompt", stage .. "=" }, {}, function(res)
+    self:_settle(res, cb)
+  end)
+end
+
+--- Rename a stage prompt entry in one loop-cli edit call.
+function Actions:rename_stage_prompt(id, old, new, content, cb)
+  cb = cb or noop
+  id = util.normalize_id(id)
+  if not id then
+    self:_settle(self:_invalid("edit", id), cb)
+    return
+  end
+  if type(old) ~= "string" or old == "" or type(new) ~= "string" or new == "" then
+    self:_settle(self:_invalid("edit", id, "阶段名不能为空"), cb)
+    return
+  end
+  self:_submit("edit", id, "edit", {
+    id,
+    "--stage-prompt-file",
+    new .. "=-",
+    "--stage-prompt",
+    old .. "=",
+  }, { stdin = normalize_text(content) }, function(res)
+    self:_settle(res, cb)
+  end)
+end
+
+--- Add a new task (title + tag are both required by loop-cli).
+function Actions:add_task(title, tag, cb)
+  cb = cb or noop
+  if type(title) ~= "string" or title == "" then
+    self:_settle(self:_invalid("add", nil, "任务标题不允许为空"), cb)
+    return
+  end
+  if type(tag) ~= "string" or tag == "" then
+    self:_settle(self:_invalid("add", nil, "分类 tag 不能为空"), cb)
+    return
+  end
+  local edit = require("loop-kit.edit")
+  if not edit.valid_tag(self.root, tag, self.loop_root) then
+    local choices = table.concat(edit.tag_list(self.root, self.loop_root), " / ")
+    self:_settle(self:_invalid("add", nil, "分类 tag 无效：" .. tag .. "；可选 " .. choices), cb)
+    return
+  end
+  self:_submit("add", nil, "add", { "--title", title, "--tag", tag, "--json" }, {}, function(res)
+    self:_settle(res, cb)
   end)
 end
 

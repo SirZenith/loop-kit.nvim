@@ -1,7 +1,7 @@
 -- Board UI: one tab, a list pane on the left and a detail pane on the right.
 --
--- The board owns the tab/window lifecycle and all keymaps. Actions, forms and
--- advanced views are required lazily so opening the board (or running the
+-- The board owns the tab/window lifecycle and all keymaps. Actions, field
+-- edits and advanced views are required lazily so opening the board (or running the
 -- render tests) never depends on the write paths. Async callbacks are guarded
 -- by a per-board request generation and a `closed` flag; stale responses never
 -- redraw a closed board.
@@ -9,6 +9,7 @@ local util = require("loop-kit.util")
 local list_ui = require("loop-kit.ui.list")
 local detail_ui = require("loop-kit.ui.detail")
 local help_ui = require("loop-kit.ui.help")
+local edit_ui = require("loop-kit.edit")
 
 -- Define the default links as soon as the board is loaded: users are not
 -- required to call setup(), and extmarks resolve hl_group names eagerly.
@@ -459,6 +460,9 @@ function Board:_list_state()
 end
 
 function Board:_draw_detail()
+  if self.editing then
+    return
+  end
   if self.closed or not self.detail or not valid_buf(self.detail_buf) then
     return
   end
@@ -488,6 +492,9 @@ function Board:draw()
     return
   end
   self:_update_winbar()
+  if self.editing then
+    return
+  end
   local kind, text = self:_list_state()
   if kind then
     self.list:notice(kind, text)
@@ -535,6 +542,9 @@ function Board:refresh(opts)
       self.load_error = res.message or "刷新失败"
     end
     self:draw()
+    if opts.after then
+      pcall(opts.after, self)
+    end
     if self.opts.on_updated then
       pcall(self.opts.on_updated, self, self.source and self.source.snapshot)
     end
@@ -632,6 +642,7 @@ function Board:_ensure_actions()
     source = self.source,
     state = self.state,
     root = self.root,
+    loop_root = self.config and self.config.loop_root_hint,
     ask = self.opts.ask,
     input = self.opts.input,
     confirm = self.opts.confirm,
@@ -687,28 +698,376 @@ function Board:_after(res)
   self:draw()
 end
 
-function Board:_open_form(task)
+local function stage_prompts(task)
+  local prompts = task and task.stagePrompt
+  if type(prompts) ~= "table" then
+    return {}
+  end
+  return prompts
+end
+
+local function stage_content(task, stage)
+  return stage_prompts(task)[stage] or ""
+end
+
+--- Ask a multiple-choice question. Injected `edit_ask` keeps tests simple;
+--- `form_ask` (boolean confirm) is accepted as a legacy alias.
+function Board:_edit_ask(prompt, options, cb)
+  if self.opts.edit_ask then
+    return self.opts.edit_ask(prompt, options, cb)
+  end
+  if self.opts.form_ask then
+    return self.opts.form_ask(prompt, function(confirmed)
+      if confirmed then
+        cb(options[1])
+      else
+        cb(nil)
+      end
+    end)
+  end
+  vim.ui.select(options, { prompt = prompt, format_item = tostring }, function(choice)
+    cb(choice)
+  end)
+end
+
+--- Prompt for one line. Injected `input` keeps the `_prompt_query` signature.
+function Board:_edit_input(prompt, default, cb)
+  if self.opts.edit_input then
+    return self.opts.edit_input(prompt, default, cb)
+  end
+  if self.opts.input then
+    return self.opts.input(prompt, cb)
+  end
+  vim.ui.input({ prompt = prompt, default = default }, cb)
+end
+
+function Board:_edit_focus_for(target)
+  if target.kind == "title" then
+    return { field = "title_line" }
+  end
+  if target.kind == "desc" then
+    return { field = "desc" }
+  end
+  if target.kind == "user_prompt" then
+    return { field = "userPrompt" }
+  end
+  if target.kind == "stage_content" or target.kind == "stage_rename" then
+    return { field = "stagePrompt." .. tostring(target.stage) }
+  end
+  return nil
+end
+
+function Board:_focus_section(focus)
+  if not focus or not self.detail or not self.detail.rendered then
+    return
+  end
+  local line
+  if focus.field == "title_line" then
+    line = self.detail.rendered.title_line or self.detail.rendered.fields.title_line
+  else
+    line = self.detail.rendered.fields[focus.field]
+  end
+  if not line then
+    return
+  end
+  if valid_win(self.detail_win) then
+    pcall(vim.api.nvim_win_set_cursor, self.detail_win, { line, 0 })
+    pcall(vim.api.nvim_set_current_win, self.detail_win)
+  end
+end
+
+function Board:_edit_target()
+  local task = self.state and self.state:selected()
+  if not task then
+    self:_notify("未选择任务")
+    return nil
+  end
+
+  local win = vim.api.nvim_get_current_win()
+  if win == self.list_win then
+    return { kind = "desc" }, task
+  end
+  if win ~= self.detail_win then
+    self:_notify("请在列表或详情窗内使用 e")
+    return nil
+  end
+  if not self.detail or not self.detail.rendered then
+    self:_notify("没有可编辑的详情内容")
+    return nil
+  end
+  local line = vim.api.nvim_win_get_cursor(self.detail_win)[1]
+  return edit_ui.target_at(self.detail.rendered, line), task
+end
+
+function Board:_begin_edit(target, task, content, is_new)
+  if self.editing then
+    self:_notify("正在编辑，请先 :w 或 <Esc>")
+    return
+  end
+  local ed = edit_ui.open({
+    root = self.root,
+    task = task,
+    target = target,
+    content = content or "",
+    detail_buf = self.detail_buf,
+    detail_win = self.detail_win,
+    ask = function(prompt, options, cb)
+      self:_edit_ask(prompt, options, cb)
+    end,
+    notify = function(message)
+      self:_notify(message)
+    end,
+    on_save = function(text, cb)
+      self:_save_edit(text, cb)
+    end,
+    on_close = function(reason)
+      self:_after_edit_close(reason)
+    end,
+  })
+  self.editing = {
+    buf = ed.buf,
+    handle = ed,
+    target = target,
+    task_id = task.id,
+    is_new = is_new == true,
+  }
+  self._edit_focus = nil
+  self.list:show_edit({
+    id = task.id,
+    title = task.title,
+    target_label = edit_ui.target_label(target),
+  })
+  self:_update_winbar()
+end
+
+function Board:_after_edit_close(reason)
+  local ed = self.editing
+  self.editing = nil
+  if self.list then
+    self.list:clear_edit()
+  end
+  if ed then
+    self:select(ed.task_id)
+  end
+  if reason == "saved" then
+    local focus = self._edit_focus
+    self._edit_focus = nil
+    self:draw()
+    self:_focus_section(focus)
+    self:refresh({
+      no_sync = true,
+      after = function()
+        self:_focus_section(focus)
+      end,
+    })
+  else
+    self._edit_focus = nil
+    self:draw()
+  end
+end
+
+function Board:_save_edit(text, cb)
+  local ed = self.editing
+  if not ed then
+    cb(false, "编辑状态已结束")
+    return
+  end
+  local target = ed.target
+  local id = ed.task_id
+  local function done(res)
+    if res and res.ok then
+      self._edit_focus = self:_edit_focus_for(target)
+      cb(true)
+    else
+      cb(false, (res and res.message) or "保存失败")
+    end
+  end
+  local actions = self:_ensure_actions()
+  if target.kind == "desc" then
+    actions:edit_desc(id, text, done)
+  elseif target.kind == "user_prompt" then
+    actions:edit_user_prompt(id, text, done)
+  elseif target.kind == "stage_content" then
+    actions:set_stage_prompt(id, target.stage, text, done)
+  else
+    cb(false, "该目标不支持编辑")
+  end
+end
+
+function Board:_edit_title(task)
+  self:_edit_input("任务标题: ", task.title, function(value)
+    if value == nil or self.closed then
+      return
+    end
+    value = tostring(value)
+    if value == "" then
+      self:_notify("任务标题不允许为空")
+      return
+    end
+    if value == task.title then
+      return
+    end
+    self:_ensure_actions():edit_title(task.id, value, function(res)
+      self:_after(res)
+      if res and res.ok then
+        self:select(task.id)
+        self:draw()
+        self:_focus_section({ field = "title_line" })
+      end
+    end)
+  end)
+end
+
+function Board:_edit_stage_new(task)
+  self:_edit_input("阶段名: ", "", function(value)
+    if value == nil or self.closed then
+      return
+    end
+    value = tostring(value)
+    if value == "" then
+      self:_notify("阶段名不能为空")
+      return
+    end
+    if not edit_ui.is_valid_stage(value) then
+      self:_notify("无效的阶段名：可用内建阶段 "
+        .. table.concat(edit_ui.BUILTIN_STAGES, " / ")
+        .. "，或包含 \".\" 且不含空白的外部名")
+      return
+    end
+    local prompts = stage_prompts(task)
+    if prompts[value] ~= nil then
+      self:_edit_ask("该阶段已存在，是否直接编辑其内容？", { "编辑该阶段", "取消" }, function(choice)
+        if choice ~= "编辑该阶段" then
+          return
+        end
+        self:_begin_edit({ kind = "stage_content", stage = value }, task, stage_content(task, value), false)
+      end)
+      return
+    end
+    self:_begin_edit({ kind = "stage_content", stage = value }, task, "", true)
+  end)
+end
+
+function Board:_edit_stage_rename(task, stage)
+  local content = stage_content(task, stage)
+  self:_edit_input("阶段名: ", stage, function(value)
+    if value == nil or self.closed then
+      return
+    end
+    value = tostring(value)
+    if value == stage then
+      return
+    end
+    if value == "" then
+      self:_edit_ask("删除该阶段提示词条目？", { "删除", "取消" }, function(choice)
+        if choice ~= "删除" then
+          return
+        end
+        self:_ensure_actions():delete_stage_prompt(task.id, stage, function(res)
+          self:_after(res)
+          if res and res.ok then
+            self:select(task.id)
+            self:draw()
+            self:_focus_section({ field = "stagePrompt" })
+          end
+        end)
+      end)
+      return
+    end
+    if stage_prompts(task)[value] ~= nil then
+      self:_notify("已有同名条目，改名失败")
+      return
+    end
+    if not edit_ui.is_valid_stage(value) then
+      self:_notify("无效的阶段名：可用内建阶段 "
+        .. table.concat(edit_ui.BUILTIN_STAGES, " / ")
+        .. "，或包含 \".\" 且不含空白的外部名")
+      return
+    end
+    self:_ensure_actions():rename_stage_prompt(task.id, stage, value, content, function(res)
+      self:_after(res)
+      if res and res.ok then
+        self:select(task.id)
+        self:draw()
+        self:_focus_section({ field = "stagePrompt." .. value })
+      end
+    end)
+  end)
+end
+
+function Board:_start_edit()
   if self.closed then
     return
   end
-  local opts = {
-    root = self.root,
-    task = task,
-    is_new = task == nil,
-    client = self.client,
-    detail_buf = self.detail_buf,
-    detail_win = self.detail_win,
-    ask = self.opts.form_ask,
-    on_saved = function()
-      if not self.closed then
-        self:refresh({ no_sync = true })
+  if self.editing then
+    self:_notify("正在编辑，请先 :w 或 <Esc>")
+    return
+  end
+  local target, task = self:_edit_target()
+  if not target then
+    return
+  end
+  if target.kind == "readonly" then
+    self:_notify("该行暂不支持编辑")
+    return
+  end
+  if target.kind == "title" then
+    return self:_edit_title(task)
+  end
+  if target.kind == "stage_new" then
+    return self:_edit_stage_new(task)
+  end
+  if target.kind == "stage_rename" then
+    return self:_edit_stage_rename(task, target.stage)
+  end
+  if target.kind == "desc" then
+    return self:_begin_edit(target, task, task.desc or "", false)
+  end
+  if target.kind == "user_prompt" then
+    return self:_begin_edit(target, task, task.userPrompt or "", false)
+  end
+  if target.kind == "stage_content" then
+    return self:_begin_edit(target, task, stage_content(task, target.stage), false)
+  end
+  self:_notify("该行暂不支持编辑")
+end
+
+function Board:_add_task()
+  self:_edit_input("新任务标题: ", "", function(title)
+    if title == nil or self.closed then
+      return
+    end
+    title = tostring(title)
+    if title == "" then
+      self:_notify("任务标题不允许为空")
+      return
+    end
+    self:_edit_input("分类 tag: ", "feature", function(tag)
+      if tag == nil or self.closed then
+        return
       end
-    end,
-    on_error = function(message)
-      self:_notify(message)
-    end,
-  }
-  require("loop-kit.form").open(opts)
+      tag = tostring(tag)
+      if tag == "" then
+        self:_notify("分类 tag 不能为空")
+        return
+      end
+      local loop_root = self.config and self.config.loop_root_hint
+      if not edit_ui.valid_tag(self.root, tag, loop_root) then
+        self:_notify("分类 tag 无效：" .. tag .. "；可选 " .. table.concat(edit_ui.tag_list(self.root, loop_root), " / "))
+        return
+      end
+      self:_ensure_actions():add_task(title, tag, function(res)
+        if not res or not res.ok then
+          self:_after(res)
+          return
+        end
+        if res.task and res.task.id then
+          self:select(res.task.id)
+        end
+        self:draw()
+      end)
+    end)
+  end)
 end
 
 function Board:_open_doc()
@@ -829,13 +1188,10 @@ local ACTIONS = {
     end
   end,
   edit = function(self)
-    local task = self.state and self.state:selected()
-    if task then
-      self:_open_form(task)
-    end
+    self:_start_edit()
   end,
   add = function(self)
-    self:_open_form(nil)
+    self:_add_task()
   end,
   open_doc = function(self)
     self:_open_doc()
@@ -904,6 +1260,18 @@ function Board:handle(action)
   if type(name) == "function" then
     return name(self, action)
   end
+
+  if self.editing then
+    if name == "help" then
+      return ACTIONS.help(self)
+    end
+    if name == "close" then
+      return self.editing.handle:request_close()
+    end
+    self:_notify("正在编辑，请先 :w 或 <Esc>")
+    return
+  end
+
   local handler = ACTIONS[name]
   if handler then
     return handler(self)
@@ -913,7 +1281,7 @@ end
 --- Open (or focus) the board for a project.
 --- opts: root/project_root, client, source, state, config, keys, list_width,
 ---       default_filter, auto_sync, auto_refresh, icons, notify, ask, input,
----       confirm, select, open_doc, form_ask.
+---       confirm, select, open_doc, edit_ask, edit_input, form_ask (legacy).
 --- Returns board, created (false when an existing board was focused).
 function M.open(opts)
   opts = opts or {}
@@ -937,6 +1305,7 @@ function M.open(opts)
   self.loading = false
   self.syncing = false
   self.load_error = nil
+  self.editing = nil
   self.keys = merge_keys(DEFAULT_KEYS, M.config.keys, opts.keys)
   self.provider = opts.provider
 

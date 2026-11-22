@@ -182,6 +182,38 @@ function List:notice(kind, text)
   return lines
 end
 
+--- Replace the task list with a static "editing" info panel.
+-- info = { id, title, target_label }
+function List:show_edit(info)
+  info = info or {}
+  local id = info.id and tostring(info.id) or ""
+  local title = info.title and tostring(info.title) or ""
+  local head = "编辑中 · " .. id
+  if title ~= "" then
+    head = head .. " " .. title
+  end
+  local lines = {
+    "",
+    head,
+    "目标：" .. tostring(info.target_label or ""),
+    ":w 保存并应用 · <Esc> 放弃（normal 模式）",
+    "",
+  }
+  self.rendered = nil
+  self.notice_kind = "edit"
+  set_readonly_lines(self.buf, lines)
+  vim.api.nvim_buf_clear_namespace(self.buf, ns, 0, -1)
+  for i = 1, #lines do
+    pcall(vim.api.nvim_buf_add_highlight, self.buf, ns, "LoopKitMuted", i - 1, 0, -1)
+  end
+  return lines
+end
+
+--- Leave edit mode; the caller redraws the list normally.
+function List:clear_edit()
+  self.notice_kind = nil
+end
+
 function List:visible_ids()
   local ids = {}
   for _, task in ipairs(self.state:visible_tasks()) do

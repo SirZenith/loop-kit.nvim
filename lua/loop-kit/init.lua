@@ -385,7 +385,7 @@ function M.show(id, opts)
   return instance
 end
 
---- Edit a task in the form (opens the board first).
+--- Edit the field under the cursor (opens the board first).
 function M.edit(id, opts)
   if type(id) == "table" then
     opts, id = id, id.id
@@ -402,7 +402,7 @@ function M.edit(id, opts)
   return instance
 end
 
---- Add a new task through the form.
+--- Add a new task (collects title and tag, then calls loop-cli add).
 function M.add(opts)
   local instance = ensure_board(opts)
   if not instance then
