@@ -126,27 +126,97 @@ local function button_width(model)
   return width
 end
 
+--- Split the spare columns into blank sections: the left margin, the gaps
+--- between buttons and the right margin (one more section than buttons).
+---
+--- Sections stay as even as possible while both margins remain identical, so
+--- rounding leftovers go to the inner gaps. Falls back to packed two-space
+--- gaps without margins when the window is too narrow.
+local function button_spacing(widths, inner)
+  local count = #widths + 1
+  local gaps = #widths - 1
+  local total = 0
+  for _, value in ipairs(widths) do
+    total = total + value
+  end
+
+  local remaining = inner - total
+  local spacing = {}
+
+  if remaining < gaps * 2 + 2 then
+    spacing[1] = 0
+    spacing[count] = 0
+    for index = 2, count - 1 do
+      spacing[index] = 2
+    end
+    return spacing
+  end
+
+  if gaps == 0 then
+    spacing[1] = math.floor(remaining / 2)
+    spacing[count] = remaining - spacing[1]
+    return spacing
+  end
+
+  local margin = math.floor(remaining / count + 0.5)
+  if margin < 1 then
+    margin = 1
+  end
+  spacing[1] = margin
+  spacing[count] = margin
+
+  local rest = remaining - margin * 2
+  local base = math.floor(rest / gaps)
+  local extra = rest % gaps
+  for index = 2, count - 1 do
+    local position = index - 1
+    spacing[index] = base + (position <= extra and 1 or 0)
+  end
+  return spacing
+end
+
+--- Blank columns kept between the float border and the rendered content.
+local PADDING = 1
+
 --- Render the model as text lines plus the byte spans of each button.
 ---
+--- Text and buttons are inset by `PADDING` on both sides. Options are laid out
+--- on one row: their gaps and the two remaining margins are all part of the
+--- even distribution across the inset content width.
 --- `spans` entries are { row, col, end_col, index } where `row` is 0-based and
 --- `col` / `end_col` are 0-based byte offsets into that line.
 function M.lines(model, width)
   width = math.max(6, math.floor(tonumber(width) or 40))
-  local inner = math.max(1, width - 4)
+  local pad = string.rep(" ", PADDING)
+  local inner = math.max(1, width - PADDING * 2)
   local lines = wrap_prompt(model.prompt, inner)
+  for index, line in ipairs(lines) do
+    if line ~= "" then
+      lines[index] = pad .. line
+    end
+  end
 
   local row = #lines + 1 -- 0-based index of the button row: one blank line follows the prompt
+  local widths = {}
+  for index, option in ipairs(model.options) do
+    widths[index] = vim.fn.strdisplaywidth(button_label(option))
+  end
+  local spacing = button_spacing(widths, inner)
+
   local parts = {}
   local spans = {}
-  local col = 0
+  local lead = pad .. string.rep(" ", spacing[1] or 0)
+  parts[#parts + 1] = lead
+  local col = #lead
   for index, option in ipairs(model.options) do
     local label = button_label(option)
     spans[index] = { row = row, col = col, end_col = col + #label, index = index }
     parts[#parts + 1] = label
     col = col + #label
     if index < #model.options then
-      parts[#parts + 1] = "  "
-      col = col + 2
+      local gap = string.rep(" ", spacing[index + 1] or 2)
+      parts[#parts + 1] = gap
+      col = col + #gap
     end
   end
 
