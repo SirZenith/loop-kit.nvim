@@ -86,7 +86,9 @@
         "#2"
       ],
       "desc": "被阻塞的条目，用于验证 blocked 状态、空 `doc` 与 `null` 提示词字段。\n\n阻塞原因：需要确认现有接口是否允许新增可选参数。\n\n- 决策点：是否引入新的公开函数\n- 备选：复用 `init.lua` 的 setup 选项",
-      "flow": "spec-impl"
+      "flow": "spec-impl",
+      "isPrivateDesc": false,
+      "blockedReason": "blockedReason 测试"
     },
     {
       "id": "#5",

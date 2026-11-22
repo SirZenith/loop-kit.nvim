@@ -173,7 +173,7 @@
         },
         "desc": {
           "type": "string",
-          "description": "较详细的描述。**gitea / github 会把它原样作为 issue 正文**（渲染 Markdown）；**jira 只作最小 ADF 纯文本**（每一非空行成一段、**空行被丢弃**、Markdown 记号按字面显示）。所以请按 Markdown 写：分段（空行分隔）、用 `- ` 列要点、用反引号包代码——这样在 gitea / github 上最好读，jira 上也不至于难认。写多段描述请用 `loop-cli add --desc-file <路径>`——`--desc \"…\"` 里的反引号会被 shell 当命令替换。"
+          "description": "较详细的描述，是供人阅读的任务说明。**gitea / github 会把它原样作为 issue 正文**（渲染 Markdown）；**jira 只作最小 ADF 纯文本**（每一非空行成一段、**空行被丢弃**、Markdown 记号按字面显示）。所以请按 Markdown 写：可换行、分段（空行分隔）、用 `- ` 列要点、用反引号包代码——这样在 gitea / github 上最好读，jira 上也不至于难认。写多段描述请用 `loop-cli add --desc-file <路径>`——`--desc \"…\"` 里的反引号会被 shell 当命令替换。"
         },
         "docParent": {
           "type": [
@@ -249,6 +249,20 @@
               "type": "null"
             }
           ]
+        },
+        "blockedReason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "#359：local 条目的阻塞原因；block --reason 写入，claim / done / 离开 blocked 时清空。远端源存 loop.meta.json。"
+        },
+        "isPrivateDesc": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "#37 / #359：条目含不可外发信息；local 写条目字段，远端落 loop.meta.json。true 时 judge 不把 desc 发给外部服务。"
         }
       }
     }
