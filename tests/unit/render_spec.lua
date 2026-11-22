@@ -139,6 +139,36 @@ describe("render.detail", function()
     match(text, "doc: %(未设置%)", "missing doc must be explicit")
   end)
 
+  it("marks dependency status with icons and status colours", function()
+    local out = render.detail(task("#7", "doing", {
+      deps = { "#2", "#3", "#4", "#5", "#9" },
+    }), {
+      tasks_by_id = {
+        ["#2"] = task("#2", "pending"),
+        ["#3"] = task("#3", "doing"),
+        ["#4"] = task("#4", "done"),
+        ["#5"] = task("#5", "blocked"),
+      },
+    })
+
+    local line_no = out.fields.deps
+    eq("- deps: #2 ○, #3 ◐, #4 ●, #5 ✕, #9", out.lines[line_no])
+    local text = table.concat(out.lines, "\n")
+    falsy(text:find("(pending)", 1, true), "dep state text must not be rendered")
+    falsy(text:find("(done)", 1, true), "dep state text must not be rendered")
+
+    local marks = {}
+    for _, range in ipairs(out.highlights) do
+      if range.line == line_no then
+        local value = out.lines[line_no]:sub(range.col_start + 1, range.col_end)
+        if value == "○" or value == "◐" or value == "●" or value == "✕" then
+          marks[#marks + 1] = value .. "=" .. range.hl_group
+        end
+      end
+    end
+    eq({ "○=LoopKitPending", "◐=LoopKitDoing", "●=LoopKitDone", "✕=LoopKitBlocked" }, marks)
+  end)
+
   it("distinguishes unknown touch from an empty touch array", function()
     local null_touch = render.detail(task("#1", "pending", { touch = vim.NIL }))
     match(table.concat(null_touch.lines, "\n"), "touch: unknown")
