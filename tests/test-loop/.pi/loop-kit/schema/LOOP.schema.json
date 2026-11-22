@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "loop-kit/LOOP.schema.json",
+  "title": "loop-kit LOOP 文件格式",
+  "description": "循环数据目录下 LOOP.json 的规范定义。格式唯一定义，项目不得覆盖；代码侧的权威实现见 crates/loop-core/src/model.rs。",
+  "type": "object",
+  "required": [
+    "version",
+    "tasks"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
+    "tasks": {
+      "type": "array",
+      "description": "数组顺序即优先级：循环取第一条可开始的条目。",
+      "items": {
+        "$ref": "#/$defs/task"
+      }
+    },
+    "flows": {
+      "type": "object",
+      "description": "可选的自定义 flow 定义表：名字 → 有序 stage 名数组，元素可以是内置 stage、`<module>.<stage>` 外部阶段，或本表内已定义的其他名字（会递归展开）。名字须小写 kebab-case（`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`），不得与内置档位 / stage 重名。作用域仅限本文件内的任务（不跨文件合并）。",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "$defs": {
+    "task": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^#[0-9]+$",
+          "description": "唯一识别 ID，顺序分配且不可变（其它条目的 deps 会引用它）。"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "doing",
+            "done",
+            "blocked"
+          ]
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1,
+          "description": "任务分类，取值范围见同目录 TARGETS.md 的「任务分类」。"
+        },
+        "origin": {
+          "enum": [
+            "human",
+            "refill",
+            "split"
+          ],
+          "description": "需求来源：人手提出为 human（缺省），补货自动提出为 refill，执行中拆分产生为 split。顺序即远端标签解析的优先级（越靠后越具体）。"
+        },
+        "openAt": {
+          "type": "string",
+          "description": "Y.M.D HH:MM:SS，月/日/时/分/秒均两位补零。"
+        },
+        "closedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "实现提交的短 hash。"
+        },
+        "doc": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "实现文档路径：绝对路径原样使用，相对路径按 loop.config.json 所在目录（项目根）解析；null 表示尚无，处理时先生成。"
+        },
+        "flow": {
+          "description": "显式流程：内置档位名、本文件 `flows` 定义的自定义名，或按时序排列的 stage 数组（非空、至少两项、不重复、末项必须是 commit）。与内置序列完全一致时等价于对应档位名。不写/null 表示走 judge/router 推断。",
+          "oneOf": [
+            {
+              "enum": [
+                "full",
+                "research-only",
+                "quick",
+                "spec-impl",
+                "research-split",
+                "doc-to-tasks"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+              "not": {
+                "enum": [
+                  "full",
+                  "research-only",
+                  "quick",
+                  "spec-impl",
+                  "research-split",
+                  "doc-to-tasks",
+                  "research",
+                  "spec",
+                  "json-task-split",
+                  "doc-task-split",
+                  "decision-question",
+                  "impl",
+                  "verify",
+                  "commit"
+                ]
+              },
+              "description": "本文件 `flows` 中定义的自定义流程名（加载时展开成内置 stage 序列）。"
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "enum": [
+                  "research",
+                  "spec",
+                  "json-task-split",
+                  "doc-task-split",
+                  "decision-question",
+                  "impl",
+                  "verify",
+                  "commit"
+                ]
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deps": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "description": "依赖：null 表示无依赖；否则为必须先行 done 的条目 id。未全部 done 时该 pending 条目不允许开始（doing 豁免，允许续做）。",
+          "items": {
+            "type": "string",
+            "pattern": "^#[0-9]+$"
+          }
+        },
+        "desc": {
+          "type": "string",
+          "description": "较详细的描述。**gitea / github 会把它原样作为 issue 正文**（渲染 Markdown）；**jira 只作最小 ADF 纯文本**（每一非空行成一段、**空行被丢弃**、Markdown 记号按字面显示）。所以请按 Markdown 写：分段（空行分隔）、用 `- ` 列要点、用反引号包代码——这样在 gitea / github 上最好读，jira 上也不至于难认。写多段描述请用 `loop-cli add --desc-file <路径>`——`--desc \"…\"` 里的反引号会被 shell 当命令替换。"
+        },
+        "docParent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "父级参考文档：绝对路径原样使用，相对路径按 loop.config.json 所在目录（项目根）解析；doc-to-tasks 固定路径修文档时只读参考。"
+        },
+        "specPrompt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "任务级实现文档提示词覆盖文件路径；存在时替代默认 spec 标准。"
+        },
+        "researchPrompt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "任务级调研提示词覆盖文件路径；存在时替代默认 research 标准。"
+        },
+        "codePrompt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "任务级实现提示词覆盖文件路径；存在时替代默认 code 标准。"
+        },
+        "verifyPrompt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "任务级验收提示词覆盖文件路径；存在时替代默认 verify 标准。"
+        },
+        "docTaskSplitPrompt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "任务级拆分提示词覆盖文件路径；存在时替代默认 doc-task-split 标准。"
+        },
+        "userPrompt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "任务级补充指令（Markdown 字符串）。构造该任务各阶段 prompt 时以 markdown 段落追加到 prompt 末尾；用 loop-cli add/edit 的 --user-prompt / --user-prompt-file 写入"
+        },
+        "stagePrompt": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "逐阶段额外提示词：键为注册阶段名，值为该阶段 prompt 末尾追加的「## 本阶段额外要求」内容；用 loop-cli add/edit 的 --stage-prompt / --stage-prompt-file 写入"
+        },
+        "touch": {
+          "description": "#316：任务级写集（写集唯一数据源）。非空的仓库根相对路径 / glob 数组；键缺失或 null 表示 unknown（fail-closed），空数组非法；用 loop-cli touch 写入。",
+          "oneOf": [
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

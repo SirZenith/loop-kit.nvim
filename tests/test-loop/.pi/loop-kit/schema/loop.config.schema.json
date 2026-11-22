@@ -1,0 +1,520 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "loop-kit/loop.config.schema.json",
+  "title": "loop-kit LOOP 源配置（项目根 loop.config.json）",
+  "description": "声明当前项目使用哪个 LOOP 源及其参数。无默认值：缺少本文件即视为「未配置源」，各命令会报错停止。代码侧的权威实现见 crates/loop-core/src/config.rs；本 schema 与其校验规则保持一致。",
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^[^/\\s]+/[^/\\s]+$"
+    },
+    "labelQuery": {
+      "description": "gitea/github 的附加标签过滤：单个标签名，或标签名数组（AND）。",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      ]
+    },
+    "judge": {
+      "description": "按任务性质判定流程的模型。与 LOOP 源正交——同一条 LOOP 在哪家源上都可以走同一个 judge 端点。不配则不做推断（走主 agent 判断档）。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseURL",
+        "model",
+        "tokenEnv"
+      ],
+      "properties": {
+        "baseURL": {
+          "type": "string",
+          "minLength": 1,
+          "description": "judge 端点根。单独成键是为了将来可直连（不经中转服务）。"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "模型 id，如 jev-1.13 / jev-1.13-free。"
+        },
+        "tokenEnv": {
+          "type": "string",
+          "minLength": 1,
+          "description": "存放 token 的**环境变量名**；token 不允许内联（与 provider 同规矩）。"
+        },
+        "confidenceFloor": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "低于此值当「不确定」，落主 agent 判断档。缺省 0.7。"
+        },
+        "stateChars": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "发给 judge 的 desc 截断长度。缺省 256。"
+        }
+      }
+    },
+    "isolation": {
+      "description": "worktree 隔离模式的验证命令配置。verify 每条是完整 shell 命令；优先级：重复 --verify > 本配置 > 自动检测。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verify"
+      ],
+      "properties": {
+        "verify": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "publish": {
+      "description": "#300：/loop publish 的外部编辑器配置，由 pi 扩展读取；loop-cli 只校验形状。缺省依次读 EDITOR、VISUAL。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "editor": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "$ref": "#/$defs/nonEmptyString"
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "type": "object",
+  "required": [
+    "version",
+    "provider",
+    "loopRoot"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
+    "provider": {
+      "enum": [
+        "local",
+        "gitea",
+        "github",
+        "jira",
+        "lua"
+      ]
+    },
+    "loopRoot": {
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "循环数据目录，相对本配置文件所在目录或绝对路径。"
+    },
+    "filePath": {
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "provider: local 时必填。任务文件路径，相对 loopRoot 或绝对路径。"
+    },
+    "baseURL": {
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "远端源的 URL（自建 Gitea / GitHub Enterprise / Jira 站点）。"
+    },
+    "repo": {
+      "$ref": "#/$defs/repo",
+      "description": "gitea/github：`owner/name`。"
+    },
+    "project": {
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "jira：项目 key。"
+    },
+    "userEnv": {
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "存放 Atlassian 账户邮箱的环境变量「名」；jira 必填（Basic 鉴权 = 邮箱 + API token）。"
+    },
+    "tokenEnv": {
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "存放凭据的环境变量「名」；token 本体不得写入本文件。"
+    },
+    "issueType": {
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "jira：新建 issue 的类型，缺省 Task。"
+    },
+    "query": {
+      "description": "在 opt-in 标签（loop:todo）之上的附加过滤：gitea/github 为标签名（数组表示 AND）；jira 为 JQL 单串。",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      ]
+    },
+    "script": {
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "provider: lua 时必填。用户自定义 Lua 脚本路径，相对本配置文件所在目录或绝对路径。"
+    },
+    "trusted": {
+      "type": "boolean",
+      "default": false,
+      "description": "provider: lua 时可选。决策 #9 逃生门：为 true 时 request_headers 额外收到只读 cred { token, user }。高风险。"
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "provider: lua 的专属参数，宿主原样透传（允许嵌套）；形状由脚本 validate_config 校验。"
+    },
+    "judge": {
+      "$ref": "#/$defs/judge",
+      "description": "按任务性质判定流程的模型，不配则不做推断（走主 agent 判断档）。"
+    },
+    "cliPath": {
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "loop-cli 可执行文件路径，相对本配置文件所在目录或绝对路径（~ 不展开）。插件定位二进制时优先于 bin/ 与 PATH 探测，低于 LOOP_BIN。"
+    },
+    "isolation": {
+      "$ref": "#/$defs/isolation"
+    },
+    "publish": {
+      "$ref": "#/$defs/publish"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "provider"
+        ],
+        "properties": {
+          "provider": {
+            "const": "local"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "filePath",
+          "loopRoot"
+        ],
+        "properties": {
+          "$schema": {
+            "type": "string"
+          },
+          "version": {
+            "const": 1
+          },
+          "provider": {
+            "const": "local"
+          },
+          "loopRoot": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "filePath": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "judge": {
+            "$ref": "#/$defs/judge"
+          },
+          "cliPath": {
+            "$ref": "#/$defs/nonEmptyString",
+            "description": "loop-cli 可执行文件路径，相对本配置文件所在目录或绝对路径（~ 不展开）。插件定位二进制时优先于 bin/ 与 PATH 探测，低于 LOOP_BIN。"
+          },
+          "isolation": {
+            "$ref": "#/$defs/isolation"
+          },
+          "publish": {
+            "$ref": "#/$defs/publish"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "provider"
+        ],
+        "properties": {
+          "provider": {
+            "const": "gitea"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "baseURL",
+          "repo",
+          "tokenEnv",
+          "loopRoot"
+        ],
+        "properties": {
+          "$schema": {
+            "type": "string"
+          },
+          "version": {
+            "const": 1
+          },
+          "provider": {
+            "const": "gitea"
+          },
+          "loopRoot": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "baseURL": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "tokenEnv": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "query": {
+            "$ref": "#/$defs/labelQuery"
+          },
+          "judge": {
+            "$ref": "#/$defs/judge"
+          },
+          "cliPath": {
+            "$ref": "#/$defs/nonEmptyString",
+            "description": "loop-cli 可执行文件路径，相对本配置文件所在目录或绝对路径（~ 不展开）。插件定位二进制时优先于 bin/ 与 PATH 探测，低于 LOOP_BIN。"
+          },
+          "isolation": {
+            "$ref": "#/$defs/isolation"
+          },
+          "publish": {
+            "$ref": "#/$defs/publish"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "provider"
+        ],
+        "properties": {
+          "provider": {
+            "const": "github"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "baseURL",
+          "repo",
+          "tokenEnv",
+          "loopRoot"
+        ],
+        "properties": {
+          "$schema": {
+            "type": "string"
+          },
+          "version": {
+            "const": 1
+          },
+          "provider": {
+            "const": "github"
+          },
+          "loopRoot": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "baseURL": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "tokenEnv": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "query": {
+            "$ref": "#/$defs/labelQuery"
+          },
+          "judge": {
+            "$ref": "#/$defs/judge"
+          },
+          "cliPath": {
+            "$ref": "#/$defs/nonEmptyString",
+            "description": "loop-cli 可执行文件路径，相对本配置文件所在目录或绝对路径（~ 不展开）。插件定位二进制时优先于 bin/ 与 PATH 探测，低于 LOOP_BIN。"
+          },
+          "isolation": {
+            "$ref": "#/$defs/isolation"
+          },
+          "publish": {
+            "$ref": "#/$defs/publish"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "provider"
+        ],
+        "properties": {
+          "provider": {
+            "const": "jira"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "baseURL",
+          "project",
+          "userEnv",
+          "tokenEnv",
+          "loopRoot"
+        ],
+        "properties": {
+          "$schema": {
+            "type": "string"
+          },
+          "version": {
+            "const": 1
+          },
+          "provider": {
+            "const": "jira"
+          },
+          "loopRoot": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "baseURL": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "project": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "userEnv": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "tokenEnv": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "issueType": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "query": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "judge": {
+            "$ref": "#/$defs/judge"
+          },
+          "cliPath": {
+            "$ref": "#/$defs/nonEmptyString",
+            "description": "loop-cli 可执行文件路径，相对本配置文件所在目录或绝对路径（~ 不展开）。插件定位二进制时优先于 bin/ 与 PATH 探测，低于 LOOP_BIN。"
+          },
+          "isolation": {
+            "$ref": "#/$defs/isolation"
+          },
+          "publish": {
+            "$ref": "#/$defs/publish"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "provider"
+        ],
+        "properties": {
+          "provider": {
+            "const": "lua"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "script",
+          "loopRoot"
+        ],
+        "properties": {
+          "$schema": {
+            "type": "string"
+          },
+          "version": {
+            "const": 1
+          },
+          "provider": {
+            "const": "lua"
+          },
+          "loopRoot": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "script": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "baseURL": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "tokenEnv": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "userEnv": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "trusted": {
+            "type": "boolean"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "judge": {
+            "$ref": "#/$defs/judge"
+          },
+          "cliPath": {
+            "$ref": "#/$defs/nonEmptyString",
+            "description": "loop-cli 可执行文件路径，相对本配置文件所在目录或绝对路径（~ 不展开）。插件定位二进制时优先于 bin/ 与 PATH 探测，低于 LOOP_BIN。"
+          },
+          "isolation": {
+            "$ref": "#/$defs/isolation"
+          },
+          "publish": {
+            "$ref": "#/$defs/publish"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "$schema": "./.pi/loop-kit/schema/loop.config.schema.json",
+  "version": 1,
+  "provider": "local",
+  "loopRoot": ".pi/loop-kit",
+  "filePath": "LOOP.json"
+}

@@ -1,0 +1,265 @@
+{
+  "$schema": "./schema/LOOP.schema.json",
+  "version": 1,
+  "tasks": [
+    {
+      "id": "#1",
+      "title": "全字段示例：实现文档、提示词覆盖与写集",
+      "status": "pending",
+      "tag": "feature",
+      "origin": "human",
+      "openAt": "2026.11.1 09:05:00",
+      "closedAt": null,
+      "hash": null,
+      "doc": "docs/impl/2026-11-22-kitchen-sink.md",
+      "deps": null,
+      "desc": "覆盖 task schema 中所有可选字段，用于验证详情渲染、编辑与新建流程。\n\n- `doc` / `docParent` 指向真实存在的 Markdown 文件\n- 五个 prompt 覆盖路径全部填写\n- `stagePrompt` 覆盖多个阶段\n- `touch` 是仓库根相对路径与 glob 的混合数组\n\n```lua\nrequire(\"loop-kit\").setup({})\n```\n\n多段描述用于检查换行、列表与代码块在详情面板中的显示。",
+      "flow": "full",
+      "docParent": "docs/reference/parent-spec.md",
+      "specPrompt": "prompts/spec.md",
+      "researchPrompt": "prompts/research.md",
+      "codePrompt": "prompts/code.md",
+      "verifyPrompt": "prompts/verify.md",
+      "docTaskSplitPrompt": "prompts/doc-task-split.md",
+      "userPrompt": "## 补充要求\n\n- 优先保持零依赖。\n- 改动同时更新 `doc/loop-kit.txt`。",
+      "stagePrompt": {
+        "impl": "不要修改 `LOOP.json` 以外的数据文件。",
+        "research": "先查 loop/knowledge 中是否已有结论。",
+        "spec": "实现文档必须列出验收命令。",
+        "verify": "逐条对照实现文档给出 PASS/FAIL。"
+      },
+      "touch": [
+        "lua/**/*.lua",
+        "tests/**/*_spec.lua",
+        "docs/**/*.md"
+      ]
+    },
+    {
+      "id": "#2",
+      "title": "进行中的修复：依赖、hash 与写集",
+      "status": "doing",
+      "tag": "bugfix",
+      "origin": "refill",
+      "openAt": "2026.11.2 10:15:30",
+      "closedAt": null,
+      "hash": "abc1234",
+      "doc": "docs/impl/2026-11-22-doing-fix.md",
+      "deps": [
+        "#1"
+      ],
+      "desc": "状态为 `doing`，依赖 #1 已完成。\n\n用于验证：\n\n- `deps` 的单条依赖与状态标注\n- `hash` 已填写但 `closedAt` 仍为空\n- `touch` 为精确文件路径（非 glob）",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/actions.lua",
+        "tests/fake-dom/actions_spec.lua"
+      ]
+    },
+    {
+      "id": "#3",
+      "title": "已完成的调研：closedAt 与多依赖",
+      "status": "done",
+      "tag": "docs",
+      "origin": "split",
+      "openAt": "2026.11.3 11:30:00",
+      "closedAt": "2026.11.5 16:45:00",
+      "hash": "deadbee",
+      "doc": "docs/research/2026-11-22-done-research.md",
+      "deps": [
+        "#1",
+        "#2"
+      ],
+      "desc": "已完成条目，用于验证 `closedAt` / `hash` 与完成态样式。\n\n`deps` 同时包含两条依赖，详情应标注它们的状态。",
+      "flow": "research-only"
+    },
+    {
+      "id": "#4",
+      "title": "阻塞项：等待人工决策",
+      "status": "blocked",
+      "tag": "refactor",
+      "origin": "human",
+      "openAt": "2026.11.4 12:00:00",
+      "closedAt": null,
+      "hash": null,
+      "doc": null,
+      "deps": [
+        "#1",
+        "#2"
+      ],
+      "desc": "被阻塞的条目，用于验证 blocked 状态、空 `doc` 与 `null` 提示词字段。\n\n阻塞原因：需要确认现有接口是否允许新增可选参数。\n\n- 决策点：是否引入新的公开函数\n- 备选：复用 `init.lua` 的 setup 选项",
+      "flow": "spec-impl"
+    },
+    {
+      "id": "#5",
+      "title": "视觉调整：使用自定义 flow 名称",
+      "status": "pending",
+      "tag": "visual",
+      "origin": "human",
+      "openAt": "2026.11.5 13:20:45",
+      "closedAt": null,
+      "hash": null,
+      "doc": null,
+      "deps": [
+        "#3"
+      ],
+      "desc": "`flow` 引用同文件 `flows` 中定义的自定义名称 `review-loop`。\n\n用于验证 flow 选择器能否列出并回显自定义流程。",
+      "flow": "review-loop",
+      "touch": [
+        "lua/loop-kit/ui/*.lua",
+        "syntax/loopkit.vim"
+      ]
+    },
+    {
+      "id": "#6",
+      "title": "体验优化：显式 stage 数组流程",
+      "status": "pending",
+      "tag": "ux",
+      "origin": "refill",
+      "openAt": "2026.11.6 14:10:00",
+      "closedAt": null,
+      "hash": null,
+      "doc": null,
+      "deps": null,
+      "desc": "`flow` 是按时序排列的 stage 数组，不是内置档位名。\n\n用于验证详情中 `>` 连接的 stage 序列显示，以及 flow 编辑器的回填。",
+      "flow": [
+        "research",
+        "spec",
+        "decision-question",
+        "impl",
+        "verify",
+        "commit"
+      ]
+    },
+    {
+      "id": "#7",
+      "title": "文档拆分：docParent 与拆分提示词",
+      "status": "pending",
+      "tag": "docs",
+      "origin": "human",
+      "openAt": "2026.11.7 08:00:00",
+      "closedAt": null,
+      "hash": null,
+      "doc": null,
+      "deps": [
+        "#3"
+      ],
+      "desc": "用于验证 `doc-to-tasks` 档位、`docParent` 参考文档与拆分提示词覆盖路径。\n\n拆分产物应写入 `docs/split/`。",
+      "flow": "doc-to-tasks",
+      "docParent": "docs/reference/parent-spec.md",
+      "docTaskSplitPrompt": "prompts/doc-task-split.md",
+      "touch": [
+        "docs/split/**",
+        "docs/reference/**"
+      ]
+    },
+    {
+      "id": "#8",
+      "title": "调研拆分：research-split 档位",
+      "status": "pending",
+      "tag": "chore",
+      "origin": "refill",
+      "openAt": "2026.11.8 09:45:10",
+      "closedAt": null,
+      "hash": null,
+      "doc": null,
+      "deps": [
+        "#1"
+      ],
+      "desc": "用于验证 `research-split` 档位的回显。\n\n该条目故意不写 `touch` 键，显示应为 `unknown`。",
+      "flow": "research-split"
+    },
+    {
+      "id": "#9",
+      "title": "默认流程：flow 显式为 null",
+      "status": "pending",
+      "tag": "feature",
+      "origin": "human",
+      "openAt": "2026.11.9 10:05:55",
+      "closedAt": null,
+      "hash": null,
+      "doc": null,
+      "deps": null,
+      "desc": "所有可空字段都显式写 `null`，用于验证「未设置」与「缺失」的显示差异。"
+    },
+    {
+      "id": "#10",
+      "title": "最小字段：只有必填项",
+      "status": "pending",
+      "tag": "chore",
+      "origin": "human",
+      "openAt": "2026.11.10 11:11:11",
+      "closedAt": null,
+      "hash": null,
+      "doc": null,
+      "deps": null,
+      "desc": "只填必填字段与基本展示字段，用于验证列表与详情对缺失可选字段的兜底。"
+    },
+    {
+      "id": "#11",
+      "title": "空依赖数组：deps 为 []",
+      "status": "pending",
+      "tag": "refactor",
+      "origin": "split",
+      "openAt": "2026.11.11 12:22:33",
+      "closedAt": null,
+      "hash": null,
+      "doc": null,
+      "deps": null,
+      "desc": "`deps` 写成空数组，用于验证它与 `null` / 缺失键的显示是否一致。\n\n同时使用 `full` 档位与自定义 `stagePrompt` 的单个键。",
+      "flow": "full",
+      "stagePrompt": {
+        "commit": "提交信息使用 conventional commits。"
+      }
+    },
+    {
+      "id": "#12",
+      "title": "已完成项：quick 档位与空依赖",
+      "status": "done",
+      "tag": "bugfix",
+      "origin": "human",
+      "openAt": "2026.11.12 13:00:00",
+      "closedAt": "2026.11.13 18:30:00",
+      "hash": "0f1e2d3",
+      "doc": "docs/impl/2026-11-22-quick-done.md",
+      "deps": null,
+      "desc": "已完成的小修复。\n\n用于验证 done 状态 + quick 档位 + 空依赖 + 缺失 `touch` 的组合。",
+      "flow": "quick"
+    },
+    {
+      "id": "#13",
+      "title": "自定义 docs-only 流程：最小上下文",
+      "status": "pending",
+      "tag": "docs",
+      "origin": "human",
+      "openAt": "2026.11.13 19:00:00",
+      "closedAt": null,
+      "hash": null,
+      "doc": null,
+      "deps": [
+        "#3",
+        "#7"
+      ],
+      "desc": "引用第二个自定义 flow `docs-only`，用于确认多个自定义流程都能在编辑器中列出。\n\n写集只包含文档路径。",
+      "flow": "docs-only",
+      "userPrompt": "只改文档，不动代码。",
+      "touch": [
+        "README.md",
+        "doc/loop-kit.txt"
+      ]
+    }
+  ],
+  "flows": {
+    "docs-only": [
+      "research",
+      "spec",
+      "verify",
+      "commit"
+    ],
+    "review-loop": [
+      "research",
+      "spec",
+      "impl",
+      "verify",
+      "commit"
+    ]
+  }
+}
