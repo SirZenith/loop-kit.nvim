@@ -350,7 +350,7 @@ describe("loop-kit highlights", function()
     LoopKitMuted = "Comment",
     LoopKitHeader = "Label",
     LoopKitError = "ErrorMsg",
-    LoopKitSelected = "Visual",
+    LoopKitSelected = "Special",
   }
 
   it("defines default-linked groups without shipping a colorscheme", function()
