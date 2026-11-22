@@ -325,10 +325,8 @@ local function valid_win(win)
   return win ~= nil and vim.api.nvim_win_is_valid(win)
 end
 
-local function default_ask(prompt, options, cb)
-  vim.ui.select(options, { prompt = prompt, format_item = tostring }, function(choice)
-    cb(choice)
-  end)
+local function default_ask(prompt, options, cb, ask_opts)
+  require("loop-kit.ui.confirm").choice(prompt, options, cb, ask_opts)
 end
 
 -- Open editors keyed by buffer name, so re-entering the same target focuses
@@ -474,7 +472,7 @@ function M.open(opts)
       if choice == "放弃修改" then
         self:close("discard")
       end
-    end)
+    end, { default = 2 })
   end
 
   registry[name] = ed

@@ -222,10 +222,8 @@ local function default_input(prompt, opts, cb)
   vim.ui.input(vim.tbl_extend("force", { prompt = prompt }, opts or {}), cb)
 end
 
-local function default_ask(prompt, cb)
-  vim.ui.select({ "确认", "取消" }, { prompt = prompt }, function(choice)
-    cb(choice == "确认")
-  end)
+local function default_ask(prompt, cb, opts)
+  require("loop-kit.ui.confirm").boolean(prompt, cb, opts)
 end
 
 local function default_notify(message)
@@ -527,7 +525,8 @@ function Advanced:meta(id, cb)
             return self:_cancel(cb, "meta", id)
           end
           self:_submit("meta", id, "meta", { id, "--clear" }, {}, cb)
-        end
+        end,
+        { default = 2 }
       )
     end
 

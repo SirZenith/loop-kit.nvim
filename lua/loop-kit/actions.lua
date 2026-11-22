@@ -14,13 +14,8 @@ local M = {}
 
 local noop = function() end
 
-local function default_ask(prompt, cb)
-  vim.ui.select({ "确认", "取消" }, {
-    prompt = prompt,
-    format_item = tostring,
-  }, function(choice)
-    cb(choice == "确认")
-  end)
+local function default_ask(prompt, cb, opts)
+  require("loop-kit.ui.confirm").boolean(prompt, cb, opts)
 end
 
 local function default_input(prompt, cb)
@@ -514,7 +509,7 @@ function Actions:remove(id, opts, cb)
       return
     end
     self:_settle({ ok = false, action = "remove", id = id, code = "cancelled", message = "已取消" }, cb)
-  end)
+  end, { default = 2 })
 end
 
 local function normalize_text(text)
