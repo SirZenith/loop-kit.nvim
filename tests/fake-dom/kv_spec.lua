@@ -236,6 +236,67 @@ describe("flow editing", function()
     eq(advanced_mod.CLEAR_FLOW, captured[5].value)
   end)
 
+  it("hides the custom flow currently in use", function()
+    local captured, captured_opts
+    local board, fake = open_board({
+      select = function(items, opts, _cb)
+        captured, captured_opts = items, opts
+      end,
+    })
+    for _, item in ipairs(board.state.tasks) do
+      if item.id == "#11" then
+        item.flow = "mine"
+      end
+    end
+    board:draw()
+    fake:respond("flow", { stdout = flow_payload({ flow = "mine" }) })
+    put_cursor(board, board.detail.rendered.fields.flow)
+    board:handle("edit")
+
+    wait_for(function()
+      return captured ~= nil
+    end)
+    local values = {}
+    for _, item in ipairs(captured) do
+      values[#values + 1] = item.value
+    end
+    eq({ "full", "quick", advanced_mod.CUSTOM_FLOW, advanced_mod.CLEAR_FLOW }, values)
+    for _, item in ipairs(captured) do
+      falsy(captured_opts.format_item(item):find("（当前）", 1, true))
+    end
+  end)
+
+  it("does not append the custom stage list currently in use", function()
+    local captured, captured_opts
+    local board, fake = open_board({
+      select = function(items, opts, _cb)
+        captured, captured_opts = items, opts
+      end,
+    })
+    local stages = { "research", "spec", "impl", "verify", "commit" }
+    for _, item in ipairs(board.state.tasks) do
+      if item.id == "#11" then
+        item.flow = stages
+      end
+    end
+    board:draw()
+    fake:respond("flow", { stdout = flow_payload({ flow = stages }) })
+    put_cursor(board, board.detail.rendered.fields.flow)
+    board:handle("edit")
+
+    wait_for(function()
+      return captured ~= nil
+    end)
+    local values = {}
+    for _, item in ipairs(captured) do
+      values[#values + 1] = item.value
+    end
+    eq({ "full", "quick", "mine", advanced_mod.CUSTOM_FLOW, advanced_mod.CLEAR_FLOW }, values)
+    for _, item in ipairs(captured) do
+      falsy(captured_opts.format_item(item):find("（当前）", 1, true))
+    end
+  end)
+
   it("falls back to builtin flows and notifies when --list fails", function()
     local captured
     local board, fake, _, notifications = open_board({

@@ -101,10 +101,10 @@ end
 
 -- `flow --list` and the following write share one command name; this payload
 -- satisfies both the flow-list decoder and the task decoder.
-local function flow_response(extra)
+local function flow_response(extra, custom)
   return json(vim.tbl_extend("force", {
     builtin = advanced_mod.FLOWS,
-    custom = {},
+    custom = custom or {},
   }, task("#6", "pending", extra)))
 end
 
@@ -125,6 +125,31 @@ describe("advanced flow", function()
     eq(full_argv(f, "flow", { "#6", "--flow", "quick" }), f:call(2).argv)
     eq(full_argv(f, "list", { "--no-sync" }), f:call(3).argv)
     eq("quick", st.tasks[1].flow)
+  end)
+
+  it("hides the custom flow currently in use from the picker", function()
+    local seen
+    local f, source, st, adv = harness({
+      pick = function(items)
+        seen = items
+        return "quick"
+      end,
+    })
+    seed(source, st, { task("#6", "pending", { flow = "mine" }) })
+    f:respond("flow", {
+      stdout = flow_response({ flow = "mine" }, { mine = { "impl", "commit" } }),
+    })
+    f:respond("list", { stdout = list_response({ task("#6", "pending", { flow = "quick" }) }) })
+
+    local res = await(function(cb)
+      adv:flow("#6", cb)
+    end)
+
+    truthy(res.ok, vim.inspect(res))
+    falsy(vim.tbl_contains(seen, "mine"))
+    truthy(vim.tbl_contains(seen, "quick"))
+    truthy(vim.tbl_contains(seen, advanced_mod.CUSTOM_FLOW))
+    eq(full_argv(f, "flow", { "#6", "--flow", "quick" }), f:call(2).argv)
   end)
 
   it("sends a validated custom stage list as one --flow value", function()

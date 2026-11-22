@@ -242,6 +242,22 @@ describe("advanced flow listing", function()
     eq({ "quick", "mine" }, advanced.flow_items(flows))
   end)
 
+  it("hides the custom flow that is currently in use", function()
+    local flows = advanced.flow_payload({
+      builtin = { "full", "quick" },
+      custom = { mine = { "impl", "commit" }, other = { "spec", "commit" } },
+    })
+    eq({ "full", "quick", "other" }, advanced.flow_items(flows, "mine"))
+  end)
+
+  it("keeps builtin flows visible when they are current", function()
+    local flows = advanced.flow_payload({
+      builtin = { "full", "quick" },
+      custom = { mine = { "impl", "commit" } },
+    })
+    eq({ "full", "quick", "mine" }, advanced.flow_items(flows, "quick"))
+  end)
+
   it("falls back to builtin names when the payload is unusable", function()
     local flows = advanced.flow_payload(nil)
     eq(advanced.FLOWS, flows.builtin)

@@ -377,6 +377,21 @@ function Advanced:_submit(action, id, command, args, extra, cb)
   end)
 end
 
+--- Best-effort lookup of the current flow for `id` (menu filtering).
+function Advanced:_current_flow(id)
+  local lists = {
+    self.state and self.state.tasks,
+    self.source and self.source.snapshot and self.source.snapshot.tasks,
+  }
+  for index = 1, #lists do
+    for _, task in ipairs(lists[index] or {}) do
+      if task.id == id then
+        return task.flow
+      end
+    end
+  end
+end
+
 --- Choose a named flow, a custom stage list, or clear the explicit flow.
 function Advanced:flow(id, cb)
   id = util.normalize_id(id)
@@ -388,7 +403,7 @@ function Advanced:flow(id, cb)
       self.notify("读取流程列表失败，使用内置流程")
       flows = { builtin = vim.deepcopy(M.FLOWS), custom = {} }
     end
-    local items = M.flow_items(flows)
+    local items = M.flow_items(flows, self:_current_flow(id))
     items[#items + 1] = M.CUSTOM_FLOW
     items[#items + 1] = M.CLEAR_FLOW
     self.select(items, { prompt = "流程" }, function(choice)
@@ -589,8 +604,19 @@ function M.flow_payload(payload)
   return { builtin = builtin, custom = custom }
 end
 
+--- True when `name` is a user-defined (custom) named flow.
+function M.is_custom_flow(flows, name)
+  if type(name) ~= "string" then
+    return false
+  end
+  return type(flows) == "table"
+    and type(flows.custom) == "table"
+    and flows.custom[name] ~= nil
+end
+
 --- Flow names in a stable order: builtin first, then custom names sorted.
-function M.flow_items(flows)
+--- The custom flow passed as `current` is omitted from the choice list.
+function M.flow_items(flows, current)
   local items = {}
   for _, name in ipairs(flows and flows.builtin or {}) do
     items[#items + 1] = name
@@ -601,7 +627,9 @@ function M.flow_items(flows)
   end
   table.sort(custom)
   for _, name in ipairs(custom) do
-    items[#items + 1] = name
+    if name ~= current then
+      items[#items + 1] = name
+    end
   end
   return items
 end

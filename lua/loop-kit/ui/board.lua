@@ -1191,12 +1191,19 @@ function Board:_edit_flow(task)
       self:_notify("读取流程列表失败，使用内置流程")
     end
     local adv = require("loop-kit.advanced")
-    local items = adv.flow_items(flows)
+    local items = adv.flow_items(flows, task.flow)
     items[#items + 1] = adv.CUSTOM_FLOW
     items[#items + 1] = adv.CLEAR_FLOW
+    -- A custom flow in use is hidden from the list; drop the current marker too,
+    -- otherwise select_one would append the hidden flow (for a stage array, as
+    -- an unreadable table label) back as an entry.
+    local current = task.flow
+    if type(current) == "table" or adv.is_custom_flow(flows, current) then
+      current = nil
+    end
     picker.select_one({
       items = items,
-      current = task.flow,
+      current = current,
       prompt = "流程",
       select = self.opts.select,
       on_choice = function(choice)
