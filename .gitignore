@@ -5,3 +5,5 @@
 /.pi/pi-wingman/*
 !/.pi/pi-wingman/permission.json
 !/.pi/pi-wingman/orchestration.json
+
+/temp
