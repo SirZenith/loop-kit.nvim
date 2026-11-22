@@ -3,6 +3,11 @@
 -- `result`) so it can be unit tested without a UI.
 local M = {}
 
+local ns = vim.api.nvim_create_namespace("loop-kit-ui-picker")
+local MARK_SELECTED = "▣"
+local MARK_UNSELECTED = "▢"
+local SELECTED_HL = "LoopKitSelected"
+
 --- Build a selection model.
 --- items: array of { value, label, selected } or bare values.
 function M.new_model(items)
@@ -68,6 +73,34 @@ end
 
 function M.selected_count(model)
   return #M.result(model)
+end
+
+--- Selection marker for a checkbox: filled when selected, hollow otherwise.
+function M.marker(selected)
+  return selected and MARK_SELECTED or MARK_UNSELECTED
+end
+
+--- One display line for a multi-select item: `> ▣ label` on the cursor row.
+function M.item_line(item, is_cursor)
+  return string.format("%s %s %s", is_cursor and ">" or " ", M.marker(item.selected), item.label)
+end
+
+--- Display lines plus selected-marker highlight ranges for a multi model.
+--- The marker starts after the one-column cursor prefix and a space.
+function M.multi_lines(model)
+  local lines, marks = {}, {}
+  for index, item in ipairs(model.items) do
+    lines[#lines + 1] = M.item_line(item, index == model.cursor)
+    if item.selected then
+      marks[#marks + 1] = {
+        line = index,
+        col_start = 2,
+        col_end = 2 + #MARK_SELECTED,
+        hl_group = SELECTED_HL,
+      }
+    end
+  end
+  return lines, marks
 end
 
 --- Single choice with a `（当前）` marker. Selecting the current value is a
@@ -147,23 +180,27 @@ function M.multi(opts)
     if not vim.api.nvim_buf_is_valid(buf) then
       return
     end
-    local lines = {}
-    for index, item in ipairs(model.items) do
-      lines[#lines + 1] = string.format(
-        "%s [%s] %s",
-        index == model.cursor and ">" or " ",
-        item.selected and "x" or " ",
-        item.label
-      )
-    end
+    local lines, marks = M.multi_lines(model)
     lines[#lines + 1] = ""
     lines[#lines + 1] = "Space 切换 · Enter 确认 · Esc 取消"
     if hidden > 0 then
       lines[#lines + 1] = string.format("已隐藏 %d 项（自身或循环依赖）", hidden)
     end
     vim.bo[buf].modifiable = true
+    vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.bo[buf].modifiable = false
+    for _, mark in ipairs(marks) do
+      pcall(
+        vim.api.nvim_buf_add_highlight,
+        buf,
+        ns,
+        mark.hl_group,
+        mark.line - 1,
+        mark.col_start,
+        mark.col_end
+      )
+    end
     if vim.api.nvim_win_is_valid(win) then
       local cursor = math.max(1, model.cursor)
       pcall(vim.api.nvim_win_set_cursor, win, { cursor, 0 })
