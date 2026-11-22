@@ -249,7 +249,6 @@
         "#22"
       ],
       "doc": ".pi/loop-kit/docs/nvim/2026-11-22T22-58-23-item-18.md",
-      "blockedReason": "等待实现 #21 与人工验收 #22",
       "branch": "pi-wt/loop-18-3aeab405",
       "baseSha": "6010f5491b8b07fcad2f37cb5ba87d4133f7fbe0",
       "touch": [
@@ -289,8 +288,7 @@
       ]
     },
     "#22": {
-      "doc": ".pi/loop-kit/docs/nvim/2026-11-22T22-58-26-item-18-manual-22.md",
-      "blockedReason": "需真机/人工：人工（manual）"
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-22T22-58-26-item-18-manual-22.md"
     }
   }
 }
