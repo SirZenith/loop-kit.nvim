@@ -194,6 +194,68 @@ describe("render.detail", function()
     truthy(with_fields.fields.isPrivateDesc > with_fields.fields.meta)
   end)
 
+  it("groups key/value fields and separates groups with rules", function()
+    local out = render.detail(task("#7", "doing", {
+      deps = { "#2" },
+      doc = "docs/plan.md",
+      docParent = "docs/parent.md",
+      specPrompt = "prompts/spec.md",
+      researchPrompt = "prompts/research.md",
+      codePrompt = "prompts/code.md",
+      verifyPrompt = "prompts/verify.md",
+      docTaskSplitPrompt = "prompts/split.md",
+    }))
+    local lines = out.lines
+    local f = out.fields
+
+    -- No rule before the first group: title, blank, then id.
+    eq(3, f.id)
+    eq("", lines[2])
+
+    local groups = {
+      { "id", "status", "tag", "origin", "openAt", "closedAt", "hash" },
+      { "deps", "doc", "docParent" },
+      { "specPrompt", "researchPrompt", "codePrompt", "verifyPrompt", "docTaskSplitPrompt" },
+    }
+    for _, group in ipairs(groups) do
+      for index = 2, #group do
+        eq(f[group[index - 1]] + 1, f[group[index]], group[index] .. " must stay inside its group")
+      end
+    end
+
+    -- Group 4 keeps the existing order: flow, touch, meta, isPrivateDesc.
+    truthy(f.flow < f.touch)
+    truthy(f.touch < f.meta)
+    eq(f.meta + 1, f.isPrivateDesc)
+
+    -- Each group after the first starts after blank / --- / blank.
+    local boundaries = {
+      { f.hash, f.deps },
+      { f.docParent, f.specPrompt },
+      { f.docTaskSplitPrompt, f.flow },
+    }
+    for _, boundary in ipairs(boundaries) do
+      eq("", lines[boundary[1] + 1])
+      eq("---", lines[boundary[1] + 2])
+      eq("", lines[boundary[1] + 3])
+      eq(boundary[1] + 4, boundary[2])
+    end
+
+    local rules = 0
+    for index, line in ipairs(lines) do
+      if line == "---" then
+        rules = rules + 1
+        eq("", lines[index - 1], "rule must be preceded by a blank line")
+        eq("", lines[index + 1], "rule must be followed by a blank line")
+      end
+    end
+    eq(3, rules, "only the three group boundaries carry a rule")
+
+    -- The last group is not followed by an extra rule.
+    eq("", lines[f.isPrivateDesc + 1])
+    eq("# 任务描述", lines[f.isPrivateDesc + 2])
+  end)
+
   it("renders blockedReason as a readonly section before the description", function()
     local reason = "需要确认接口\n第二行原因"
     local out = render.detail(task("#7", "blocked", {

@@ -376,6 +376,17 @@ function M.detail(task, opts)
     return line
   end
 
+  -- Key/value groups read better with a Markdown rule between them. The
+  -- title already separates the metadata from the heading, so no rule is
+  -- emitted before the first group or after the last one.
+  local function group_rule()
+    if #out.lines > 0 and out.lines[#out.lines] ~= "" then
+      push("")
+    end
+    push("---")
+    push("")
+  end
+
   local title = one_line(task.title)
   out.title_line = push("# " .. (title ~= "" and title or "(untitled)"))
   whole(out.title_line, "LoopKitDetailTitle")
@@ -389,15 +400,20 @@ function M.detail(task, opts)
   field("openAt", format_value(task.openAt))
   field("closedAt", format_value(task.closedAt))
   field("hash", format_value(task.hash))
+
+  group_rule()
   field("deps", deps_text(task, opts))
   path_field("doc", task.doc)
   path_field("docParent", task.docParent)
+
+  group_rule()
   path_field("specPrompt", task.specPrompt)
   path_field("researchPrompt", task.researchPrompt)
   path_field("codePrompt", task.codePrompt)
   path_field("verifyPrompt", task.verifyPrompt)
   path_field("docTaskSplitPrompt", task.docTaskSplitPrompt)
 
+  group_rule()
   local flow = flow_text(task)
   field("flow", flow or "(default)")
 

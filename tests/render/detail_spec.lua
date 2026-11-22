@@ -158,6 +158,33 @@ describe("ui.detail: readonly markdown view", function()
     eq(false, vim.bo[buf].modifiable)
   end)
 
+  it("separates key/value groups with rules without doubling the decide rule", function()
+    local detail, buf = make_detail()
+    local analysis = { target = "#5", outstandingCount = 0, eligible = {}, blocked = {}, stuck = {} }
+    local rendered = detail:render(TASK, { ["#2"] = DEP }, analysis, { TASK, DEP })
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local f = rendered.fields
+
+    -- Group boundaries: hash | deps | specPrompt | flow, then the decide block.
+    eq(f.hash + 4, f.deps)
+    eq(f.docParent + 4, f.specPrompt)
+    eq(f.docTaskSplitPrompt + 4, f.flow)
+    eq(f.isPrivateDesc + 4, f.decide)
+
+    local rules = {}
+    for index, line in ipairs(lines) do
+      if line == "---" then
+        rules[#rules + 1] = index
+        eq("", lines[index - 1], "rule must be preceded by a blank line")
+        eq("", lines[index + 1], "rule must be followed by a blank line")
+      end
+    end
+    eq(4, #rules, "three group rules plus the decide rule")
+    for index = 2, #rules do
+      truthy(rules[index] - rules[index - 1] > 2, "rules must not be duplicated")
+    end
+  end)
+
   it("falls back to a placeholder without a task without becoming editable", function()
     local detail, buf = make_detail()
     detail:render(nil)
