@@ -20,7 +20,8 @@ local function make_task(overrides)
       ["a.b"] = "外部阶段",
     },
     flow = "quick",
-    private = false,
+    isPrivateDesc = false,
+    blockedReason = "第一行原因\n第二行原因",
     touch = { "lua/loop-kit/edit.lua" },
   }
   for key, value in pairs(overrides or {}) do
@@ -73,7 +74,8 @@ describe("edit.target_at", function()
     for _, line in ipairs({
       fields.id,
       fields.status,
-      fields.private,
+      fields.blockedReason,
+      fields.blockedReason_content,
       fields.meta,
       fields.decide,
       fields.analysis,
@@ -92,6 +94,8 @@ describe("edit.target_at", function()
     for _, name in ipairs(edit.KV_FIELDS) do
       eq({ kind = name }, edit.target_at(rendered, fields[name]))
     end
+    eq({ kind = "isPrivateDesc" }, edit.target_at(rendered, fields.isPrivateDesc))
+    truthy(fields.isPrivateDesc > fields.meta, "isPrivateDesc follows meta")
     eq({ kind = "touch" }, edit.target_at(rendered, fields.touch))
     -- Child path lines belong to the touch field.
     eq({ kind = "touch" }, edit.target_at(rendered, fields.touch + 1))
@@ -196,6 +200,23 @@ describe("actions stage edit arguments", function()
       "spec=",
     }, calls[1].args)
     eq("旧内容", calls[1].opts.stdin)
+  end)
+
+  it("toggles isPrivateDesc through the private command", function()
+    local actions, calls = new_actions()
+    local done = false
+    actions:set_is_private_desc("#11", true, function()
+      done = true
+    end)
+    eq(true, done)
+    eq(1, #calls)
+    eq("private", calls[1].command)
+    eq({ "#11", "--on" }, calls[1].args)
+
+    actions:set_is_private_desc("#11", false, function() end)
+    eq(2, #calls)
+    eq("private", calls[2].command)
+    eq({ "#11", "--off" }, calls[2].args)
   end)
 
   it("deletes a stage with an empty assignment", function()

@@ -170,7 +170,10 @@ require("loop-kit").setup({
 - 标题 / 阶段标题 → 单行 input。
 - 描述 / 用户提示词 / 阶段正文 → `buftype=acwrite` 的 Markdown buffer。
 - “各阶段提示词”的空位 → 先输入阶段名。
-- 元数据与 analysis → 拒绝，并提示“该行暂不支持编辑”。
+- `isPrivateDesc` → 直接切换开关：当前为 `true` 时发送 `private --off`，否则
+  发送 `private --on`，不打开编辑 buffer。
+- “# 阻塞原因”标题与正文 → 只读；按 `e` 提示“阻塞原因不可直接编辑，请按 b 重新设置”。
+- 其它元数据与 analysis → 拒绝，并提示“该行暂不支持编辑”。
 
 编辑 buffer 名为 `loopkit://<root>/edit/<encoded-id>/<target>[/<stage>]`
 （`#` 编码为 `%23`），设置 `filetype=markdown`、`swapfile=false`。`:w` 由
@@ -194,8 +197,8 @@ normal 模式 `<Esc>` / `<C-c>` 退出：干净时直接关闭，dirty 时询问
 `feature`/`bugfix`/`refactor`/`ux`/`visual`/`docs`/`chore`），然后执行
 `add --title T --tag X --json`；任一步取消或 tag 非法都不调用 CLI。
 
-编辑只提交当前字段，不发送 `status`/`flow`/`private`/`touch`/`meta`；
-它们各有独立命令。
+编辑只提交当前字段，不发送 `status`/`flow`/`touch`/`meta`；`isPrivateDesc`
+走 `private --on`/`--off`，其余字段各有独立命令。
 
 ## provider 矩阵与写入语义
 

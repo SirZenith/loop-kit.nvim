@@ -174,12 +174,13 @@ describe("render.detail", function()
     truthy(text:find(desc, 1, true), "description must be copied without rewrapping")
   end)
 
-  it("applies defaults for flow, private and meta fields", function()
+  it("applies defaults for flow, isPrivateDesc and meta fields", function()
     local out = render.detail(task("#5", "doing"))
     local text = table.concat(out.lines, "\n")
     match(text, "flow: %(default%)")
     match(text, "meta: %(unset%)")
-    eq(nil, text:find("private:", 1, true), "private is only rendered when set")
+    match(text, "isPrivateDesc: %(unset%)")
+    truthy(out.fields.isPrivateDesc > out.fields.meta, "isPrivateDesc must follow meta")
 
     local with_fields = render.detail(task("#6", "doing", {
       flow = { "research", "spec", "commit" },
@@ -188,8 +189,27 @@ describe("render.detail", function()
     }))
     local fields_text = table.concat(with_fields.lines, "\n")
     match(fields_text, "flow: research > spec > commit")
-    match(fields_text, "private: false")
+    match(fields_text, "isPrivateDesc: false")
     match(fields_text, "meta: branch=main baseSha=abc123")
+    truthy(with_fields.fields.isPrivateDesc > with_fields.fields.meta)
+  end)
+
+  it("renders blockedReason as a readonly section before the description", function()
+    local reason = "需要确认接口\n第二行原因"
+    local out = render.detail(task("#7", "blocked", {
+      desc = "任务描述正文",
+      blockedReason = reason,
+    }))
+    local text = table.concat(out.lines, "\n")
+    match(text, "# 阻塞原因")
+    truthy(text:find(reason, 1, true), "blockedReason must be copied verbatim")
+    truthy(out.fields.blockedReason < out.fields.desc)
+    eq("需要确认接口", out.lines[out.fields.blockedReason_content])
+    eq("第二行原因", out.lines[out.fields.blockedReason_content + 1])
+
+    local without = render.detail(task("#8", "blocked"))
+    eq(nil, without.fields.blockedReason, "empty blockedReason must not add a section")
+    falsy(table.concat(without.lines, "\n"):find("# 阻塞原因", 1, true))
   end)
 end)
 

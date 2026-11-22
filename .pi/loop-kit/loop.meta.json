@@ -191,6 +191,21 @@
         "tests/fake-dom/kv_spec.lua",
         "tests/fake-dom/board_spec.lua"
       ]
+    },
+    "#13": {
+      "touch": [
+        "lua/loop-kit/render.lua",
+        "lua/loop-kit/edit.lua",
+        "lua/loop-kit/actions.lua",
+        "lua/loop-kit/ui/board.lua",
+        "lua/loop-kit/ui/help.lua",
+        "tests/unit/render_spec.lua",
+        "tests/render/detail_spec.lua",
+        "tests/unit/edit_spec.lua",
+        "tests/fake-dom/board_spec.lua",
+        "README.md",
+        "doc/loop-kit.txt"
+      ]
     }
   }
 }

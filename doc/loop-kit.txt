@@ -118,7 +118,9 @@ e 依据当前窗口与光标位置选择目标：在列表窗总是编辑 desc�
 render.detail 的字段锚点判断，不做 Markdown 扫描。
   - 标题行 → 单行 input。描述、用户提示词、阶段正文 → buftype=acwrite 的
     Markdown buffer。阶段标题行 → 单行 input。“# 各阶段提示词”的空位 →
-    先输入阶段名。元数据与 analysis → 拒绝（“该行暂不支持编辑”）。
+    先输入阶段名。isPrivateDesc → 直接切换开关（true 时 --off，否则 --on）。
+    “# 阻塞原因”标题与正文 → 只读（“阻塞原因不可直接编辑，请按 b 重新设置”）。
+    其它元数据与 analysis → 拒绝（“该行暂不支持编辑”）。
   - 编辑 buffer 名为 loopkit://<root>/edit/<encoded-id>/<target>[/<stage>]，
     id 中的 # 编码为 %23。buffer 设置 filetype=markdown、swapfile=false，
     :w 由 BufWriteCmd 从 stdin 提交，不写本地文件。失败保留 dirty 并提示；
@@ -143,7 +145,8 @@ a 依次输入标题与分类 tag（默认 feature）。tag 须属于 <loopRoot>
 的「任务分类（tag）」集合（解析失败回退 feature/bugfix/refactor/ux/visual/docs/chore），
 然后 add --title T --tag X --json；任一步取消或 tag 非法都不调用 CLI。
 
-编辑不发送 status/flow/private/touch/meta；这些字段走各自命令。
+编辑不发送 status/flow/touch/meta；isPrivateDesc 走 private --on/--off，
+其余字段走各自命令。
 
 ==============================================================================
 7. provider 与写入语义                                          *loop-kit-provider*

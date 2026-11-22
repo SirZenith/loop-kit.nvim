@@ -17,6 +17,7 @@ local TASKS = {
     userPrompt = "旧提示词",
     stagePrompt = { spec = "旧阶段正文" },
     flow = "quick",
+    isPrivateDesc = false,
     touch = {},
   },
 }
@@ -129,5 +130,29 @@ describe("board edit mode", function()
     end, 10)
     eq(board.detail_buf, vim.api.nvim_win_get_buf(board.detail_win))
     eq(board.detail.rendered.fields.touch, vim.api.nvim_win_get_cursor(board.detail_win)[1])
+  end)
+
+  it("toggles isPrivateDesc when e is pressed on its line", function()
+    local board, fake, state = open_board()
+    fake:respond("private", {
+      stdout = json({ task = { id = "#11", title = "看板编辑", status = "pending", isPrivateDesc = true } }),
+    })
+    local task = state:selected()
+    local before = fake:call_count()
+    vim.api.nvim_set_current_win(board.detail_win)
+    vim.api.nvim_win_set_cursor(board.detail_win, { board.detail.rendered.fields.isPrivateDesc, 0 })
+
+    board:_start_edit()
+
+    vim.wait(5000, function()
+      return fake:call_count() > before and state:selected().isPrivateDesc == true
+    end, 10)
+    local call = fake:call(before + 1)
+    truthy(vim.tbl_contains(call.argv, "private"))
+    truthy(vim.tbl_contains(call.argv, "#11"))
+    truthy(vim.tbl_contains(call.argv, "--on"))
+    falsy(vim.tbl_contains(call.argv, "--off"))
+    eq(true, state:selected().isPrivateDesc)
+    eq(board.detail.rendered.fields.isPrivateDesc, vim.api.nvim_win_get_cursor(board.detail_win)[1])
   end)
 end)

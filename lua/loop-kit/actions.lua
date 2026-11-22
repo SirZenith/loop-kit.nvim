@@ -567,6 +567,19 @@ function Actions:edit_user_prompt(id, text, cb)
   end)
 end
 
+--- Toggle whether the task description may be sent to external judges.
+function Actions:set_is_private_desc(id, value, cb)
+  cb = cb or noop
+  id = util.normalize_id(id)
+  if not id then
+    self:_settle(self:_invalid("private", id), cb)
+    return
+  end
+  self:_submit("private", id, "private", { id, value == true and "--on" or "--off" }, {}, function(res)
+    self:_settle(res, cb)
+  end)
+end
+
 --- Create or replace a single stage prompt through stdin.
 function Actions:set_stage_prompt(id, stage, text, cb)
   cb = cb or noop

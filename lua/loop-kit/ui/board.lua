@@ -767,6 +767,7 @@ function Board:_edit_focus_for(target)
     or target.kind == "verifyPrompt"
     or target.kind == "docTaskSplitPrompt"
     or target.kind == "flow"
+    or target.kind == "isPrivateDesc"
   then
     return { field = target.kind }
   end
@@ -1225,6 +1226,22 @@ function Board:_edit_flow(task)
   end)
 end
 
+function Board:_toggle_private_desc(task)
+  local current = task.isPrivateDesc
+  if current == nil or current == vim.NIL then
+    current = task.private
+  end
+  local value = not (current == true)
+  self:_ensure_actions():set_is_private_desc(task.id, value, function(res)
+    self:_after(res)
+    if res and res.ok then
+      self:select(task.id)
+      self:draw()
+      self:_focus_section({ field = "isPrivateDesc" })
+    end
+  end)
+end
+
 function Board:_edit_touch(task)
   local paths = type(task.touch) == "table" and task.touch or {}
   local content = {}
@@ -1261,6 +1278,9 @@ function Board:_start_edit()
   end
   if target.kind == "flow" then
     return self:_edit_flow(task)
+  end
+  if target.kind == "isPrivateDesc" then
+    return self:_toggle_private_desc(task)
   end
   if target.kind == "touch" then
     return self:_edit_touch(task)

@@ -14,9 +14,10 @@ local TASK = {
   deps = { "#2" },
   doc = "docs/nvim/plan.md",
   flow = { "spec", "impl", "commit" },
-  private = true,
+  isPrivateDesc = true,
   touch = { "lua/loop-kit/ui/detail.lua" },
   meta = { branch = "main", baseSha = "abc123" },
+  blockedReason = "Reason one.\nReason two.",
   desc = "First line.\nSecond line.",
 }
 
@@ -63,10 +64,15 @@ describe("ui.detail: readonly markdown view", function()
     eq("# Ship the detail pane", lines[1])
     eq("- deps: #2 (done)", line_with(lines, "- deps:"))
     eq("- flow: spec > impl > commit", line_with(lines, "- flow:"))
-    eq("- private: true", line_with(lines, "- private:"))
+    eq("- isPrivateDesc: true", line_with(lines, "- isPrivateDesc:"))
     eq("- touch:", line_with(lines, "- touch:"))
     truthy(line_with(lines, "  - lua/loop-kit/ui/detail.lua"))
     eq("- meta: branch=main baseSha=abc123", line_with(lines, "- meta:"))
+    truthy(rendered.fields.isPrivateDesc > rendered.fields.meta, "isPrivateDesc follows meta")
+    eq("# 阻塞原因", line_with(lines, "# 阻塞原因"))
+    eq("Reason one.", lines[rendered.fields.blockedReason_content])
+    eq("Reason two.", lines[rendered.fields.blockedReason_content + 1])
+    truthy(rendered.fields.blockedReason < rendered.fields.desc, "blocked reason precedes desc")
     for _, range in ipairs(rendered.highlights) do
       if range.line == rendered.fields.desc_content then
         neq("LoopKitDetailMuted", range.hl_group, "right-pane description keeps markdown colours")
@@ -128,10 +134,12 @@ describe("ui.detail: readonly markdown view", function()
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 
     local meta_line = rendered.fields.meta
-    eq("", lines[meta_line + 1])
-    eq("---", lines[meta_line + 2])
-    eq("", lines[meta_line + 3])
-    eq(meta_line + 4, rendered.fields.decide)
+    local private_line = rendered.fields.isPrivateDesc
+    eq(meta_line + 1, private_line)
+    eq("", lines[private_line + 1])
+    eq("---", lines[private_line + 2])
+    eq("", lines[private_line + 3])
+    eq(private_line + 4, rendered.fields.decide)
     eq(rendered.fields.decide + 1, rendered.fields.analysis)
     truthy(rendered.fields.desc > rendered.fields.analysis, "description follows the metadata block")
 

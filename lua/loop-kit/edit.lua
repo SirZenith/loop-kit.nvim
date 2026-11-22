@@ -35,6 +35,7 @@ local KV_FIELDS = {
   "verifyPrompt",
   "docTaskSplitPrompt",
   "flow",
+  "isPrivateDesc",
 }
 
 M.KV_FIELDS = KV_FIELDS
@@ -66,8 +67,12 @@ local READONLY_FIELDS = {
     message = "提交由 done --hash 维护",
   },
   {
-    name = "private",
-    message = "该行暂不支持编辑",
+    name = "blockedReason",
+    message = "阻塞原因不可直接编辑，请按 b 重新设置",
+  },
+  {
+    name = "blockedReason_content",
+    message = "阻塞原因不可直接编辑，请按 b 重新设置",
   },
   {
     name = "meta",
@@ -116,6 +121,7 @@ local LABELS = {
   verifyPrompt = "验收提示词",
   docTaskSplitPrompt = "文档拆分提示词",
   flow = "流程",
+  isPrivateDesc = "不可外发标记",
   touch = "写集",
 }
 

@@ -401,14 +401,6 @@ function M.detail(task, opts)
   local flow = flow_text(task)
   field("flow", flow or "(default)")
 
-  local private = task.isPrivateDesc
-  if private == nil then
-    private = task.private
-  end
-  if private ~= nil and private ~= vim.NIL then
-    field("private", private and "true" or "false")
-  end
-
   local touch = task.touch
   if touch == nil or touch == vim.NIL then
     field("touch", "unknown")
@@ -432,6 +424,16 @@ function M.detail(task, opts)
 
   field("meta", meta_text(task))
 
+  local private_desc = task.isPrivateDesc
+  if private_desc == nil or private_desc == vim.NIL then
+    private_desc = task.private
+  end
+  if private_desc == nil or private_desc == vim.NIL then
+    field("isPrivateDesc", "(unset)", "LoopKitDetailMuted")
+  else
+    field("isPrivateDesc", private_desc == true and "true" or "false")
+  end
+
   local analysis = opts.analysis
   if type(analysis) == "table" then
     push("")
@@ -443,6 +445,13 @@ function M.detail(task, opts)
     subfield("eligible", tostring(analysis.eligible == true))
     subfield("blocked", tostring(analysis.blocked == true))
     subfield("stuck", tostring(analysis.stuck == true))
+  end
+
+  local blocked_reason = task.blockedReason
+  if type(blocked_reason) == "string" and blocked_reason ~= "" then
+    section("blockedReason", "# 阻塞原因")
+    out.fields.blockedReason_content = push_block(blocked_reason)
+    end_block()
   end
 
   section("desc", "# 任务描述")
