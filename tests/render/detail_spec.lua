@@ -62,7 +62,7 @@ describe("ui.detail: readonly markdown view", function()
     eq(false, vim.bo[buf].swapfile)
 
     eq("# Ship the detail pane", lines[1])
-    eq("- deps: #2 (done)", line_with(lines, "- deps:"))
+    eq("- deps: #2 ●", line_with(lines, "- deps:"))
     eq("- flow: spec > impl > commit", line_with(lines, "- flow:"))
     eq("- isPrivateDesc: true", line_with(lines, "- isPrivateDesc:"))
     eq("- touch:", line_with(lines, "- touch:"))

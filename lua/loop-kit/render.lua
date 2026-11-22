@@ -222,24 +222,42 @@ function M.list(groups, opts)
   return out
 end
 
+--- Render the dependency list, annotating each known task with its status icon
+--- (coloured by the status) and falling back to the bare id when the task is
+--- missing. Returns the display text and 0-based byte ranges into it.
 local function deps_text(task, opts)
   local deps = task.deps
   if deps == nil or deps == vim.NIL or type(deps) ~= "table" or #deps == 0 then
-    return "(none)"
+    return "(none)", {}
   end
 
+  local icons = vim.tbl_extend("force", M.icons, opts.icons or {})
   local parts = {}
-  for _, dep in ipairs(deps) do
+  local ranges = {}
+  local col = 0
+  for index, dep in ipairs(deps) do
     local id = util.normalize_id(dep) or one_line(tostring(dep))
     local by_id = opts.tasks_by_id
     local dep_task = by_id and (by_id[id] or by_id[dep])
-    if dep_task and dep_task.status then
-      parts[#parts + 1] = string.format("%s (%s)", id, dep_task.status)
-    else
-      parts[#parts + 1] = id
+    local status = dep_task and dep_task.status
+    local value = id
+    if type(status) == "string" and status ~= "" then
+      status = status:lower()
+      local icon = icons[status] or "?"
+      value = id .. " " .. icon
+      ranges[#ranges + 1] = {
+        col_start = col + #id + 1,
+        col_end = col + #id + 1 + #icon,
+        hl_group = status_hl(status),
+      }
+    end
+    parts[#parts + 1] = value
+    col = col + #value
+    if index < #deps then
+      col = col + #", "
     end
   end
-  return table.concat(parts, ", ")
+  return table.concat(parts, ", "), ranges
 end
 
 local function flow_text(task)
@@ -274,7 +292,8 @@ end
 
 --- Render a task detail as Markdown lines.
 ---
---- opts: { tasks_by_id = { ["#2"] = task } } annotates dependency statuses.
+--- opts: { tasks_by_id = { ["#2"] = task } } annotates dependency statuses
+--- with their status icon; "icons" overrides the default icon table.
 ---
 --- Returns `{ lines, fields, title_line }` where `fields` maps a metadata key
 --- (id/status/deps/doc/touch/...) to the line that starts it.
@@ -402,7 +421,12 @@ function M.detail(task, opts)
   field("hash", format_value(task.hash))
 
   group_rule()
-  field("deps", deps_text(task, opts))
+  local deps_value, deps_ranges = deps_text(task, opts)
+  local deps_line = field("deps", deps_value)
+  local deps_value_col = 2 + #"deps" + 2
+  for _, range in ipairs(deps_ranges) do
+    push_hl(deps_line, deps_value_col + range.col_start, deps_value_col + range.col_end, range.hl_group)
+  end
   path_field("doc", task.doc)
   path_field("docParent", task.docParent)
 
