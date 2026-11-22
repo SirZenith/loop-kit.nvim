@@ -733,14 +733,25 @@ function Board:_edit_ask(prompt, options, cb)
 end
 
 --- Prompt for one line. Injected `input` keeps the `_prompt_query` signature.
-function Board:_edit_input(prompt, default, cb)
+--- `input_opts` is forwarded to `vim.ui.input` (e.g. a `completion` spec).
+function Board:_edit_input(prompt, default, cb, input_opts)
   if self.opts.edit_input then
-    return self.opts.edit_input(prompt, default, cb)
+    return self.opts.edit_input(prompt, default, cb, input_opts)
   end
   if self.opts.input then
     return self.opts.input(prompt, cb)
   end
-  vim.ui.input({ prompt = prompt, default = default }, cb)
+  vim.ui.input(
+    vim.tbl_extend("force", { prompt = prompt, default = default }, input_opts or {}),
+    cb
+  )
+end
+
+--- Prompt for a project-root relative path; absolute paths stay allowed.
+function Board:_edit_path_input(prompt, default, cb)
+  local path_complete = require("loop-kit.path_complete")
+  local completion = path_complete.input_completion(self.root, { allow_absolute = true })
+  self:_edit_input(prompt, default, cb, { completion = completion })
 end
 
 function Board:_edit_focus_for(target)
@@ -1143,7 +1154,7 @@ function Board:_edit_prompt(task, field)
     verifyPrompt = "验收提示词: ",
     docTaskSplitPrompt = "文档拆分提示词: ",
   }
-  self:_edit_input(labels[field] or (field .. ": "), current, function(value)
+  self:_edit_path_input(labels[field] or (field .. ": "), current, function(value)
     if value == nil or self.closed then
       return
     end

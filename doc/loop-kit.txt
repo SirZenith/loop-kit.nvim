@@ -137,6 +137,11 @@ render.detail 的字段锚点判断，不做 Markdown 扫描。
   - 编辑期间列表显示 “编辑中 · <id> <title>” 信息栏，其余任务操作被忽略；
     ? 仍可打开帮助，q 先退出编辑（dirty 时同样询问）。
   - 保存成功后选中任务，并把详情光标放回对应标题。
+  - 路径字段（doc、docParent 与 5 个 *Prompt）的单行输入以项目根为基准
+    补全：裸相对路径（如 lua/lo）即列出候选，目录候选带 /，保留 ./
+    前缀，绝对路径也可补全。touch 的多行 buffer 设置 buffer-local
+    omnifunc，行内按 <C-x><C-o> 触发，只补全仓库相对路径（不允许
+    绝对路径与 ..）。补全不依赖 nvim-cmp。
 
 阶段名规则：
   - 内建阶段 research / spec / json-task-split / doc-task-split /

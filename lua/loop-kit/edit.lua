@@ -4,6 +4,7 @@
 local M = {}
 
 local kv = require("loop-kit.kv")
+local path_complete = require("loop-kit.path_complete")
 
 local BUILTIN_STAGES = {
   "research",
@@ -366,6 +367,9 @@ function M.open(opts)
   vim.bo[buf].filetype = "markdown"
   vim.bo[buf].modified = false
   pcall(vim.api.nvim_buf_set_name, buf, name)
+  if target.kind == "touch" then
+    path_complete.attach_omnifunc(buf, root, { allow_absolute = false })
+  end
 
   if valid_win(opts.detail_win) then
     pcall(vim.api.nvim_win_set_buf, opts.detail_win, buf)

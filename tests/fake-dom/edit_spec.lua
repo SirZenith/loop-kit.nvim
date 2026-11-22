@@ -357,3 +357,74 @@ describe("new task input", function()
     eq(baseline, fake:call_count())
   end)
 end)
+
+describe("path field completion", function()
+  local PATH_FIELDS = {
+    "doc",
+    "docParent",
+    "specPrompt",
+    "researchPrompt",
+    "codePrompt",
+    "verifyPrompt",
+    "docTaskSplitPrompt",
+  }
+
+  it("passes a project-root customlist to every path field input", function()
+    local seen = {}
+    local board = open_board({
+      edit_input = function(_, _, cb, opts)
+        seen[#seen + 1] = opts or {}
+        cb(nil)
+      end,
+    })
+    vim.api.nvim_set_current_win(board.detail_win)
+    for _, field in ipairs(PATH_FIELDS) do
+      local line = board.detail.rendered.fields[field]
+      truthy(line, "missing detail line for " .. field)
+      vim.api.nvim_win_set_cursor(board.detail_win, { line, 0 })
+      board:handle("edit")
+    end
+
+    eq(#PATH_FIELDS, #seen)
+    for index, opts in ipairs(seen) do
+      eq(
+        "customlist,v:lua.LoopKitPathComplete",
+        opts and opts.completion,
+        "field " .. PATH_FIELDS[index]
+      )
+    end
+  end)
+
+  it("does not attach completion to the title input", function()
+    local seen = {}
+    local board = open_board({
+      edit_input = function(_, _, cb, opts)
+        seen[#seen + 1] = opts or {}
+        cb(nil)
+      end,
+    })
+    vim.api.nvim_set_current_win(board.detail_win)
+    vim.api.nvim_win_set_cursor(board.detail_win, { board.detail.rendered.title_line, 0 })
+    board:handle("edit")
+
+    eq(1, #seen)
+    falsy(seen[1] and seen[1].completion)
+  end)
+
+  it("attaches repository-relative omnifunc context to touch buffers", function()
+    local board, _, state = open_board()
+    local task = state:selected()
+    vim.api.nvim_set_current_win(board.detail_win)
+    vim.api.nvim_win_set_cursor(board.detail_win, { board.detail.rendered.fields.touch, 0 })
+    board:handle("edit")
+
+    truthy(board.editing, "touch edit did not start")
+    local buf = board.editing.handle.buf
+    eq("v:lua.LoopKitPathOmnifunc", vim.bo[buf].omnifunc)
+    eq(board.root, vim.b[buf].loopkit_path_root)
+    eq(false, vim.b[buf].loopkit_path_allow_absolute)
+    eq(0, require("loop-kit.path_complete").omnifunc(1, nil))
+
+    board.editing.handle:request_close()
+  end)
+end)
