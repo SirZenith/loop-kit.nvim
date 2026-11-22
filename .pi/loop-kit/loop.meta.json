@@ -244,7 +244,12 @@
       "baseSha": "6010f5491b8b07fcad2f37cb5ba87d4133f7fbe0"
     },
     "#18": {
+      "deps": [
+        "#21",
+        "#22"
+      ],
       "doc": ".pi/loop-kit/docs/nvim/2026-11-22T22-58-23-item-18.md",
+      "blockedReason": "等待实现 #21 与人工验收 #22",
       "branch": "pi-wt/loop-18-3aeab405",
       "baseSha": "6010f5491b8b07fcad2f37cb5ba87d4133f7fbe0",
       "touch": [
@@ -266,6 +271,25 @@
       "hash": "46bbcdc0af84763fc33e36c406def316c22ca348",
       "branch": "pi-wt/loop-20-c9e860a2",
       "baseSha": "6010f5491b8b07fcad2f37cb5ba87d4133f7fbe0"
+    },
+    "#21": {
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-22T22-58-23-item-18.md",
+      "flow": "spec-impl",
+      "branch": "pi-wt/loop-21-607716b8",
+      "baseSha": "65f8032af49f3878c4c62ef1ba48fd77523b8e46",
+      "touch": [
+        "lua/loop-kit/ui/confirm.lua",
+        "lua/loop-kit/actions.lua",
+        "lua/loop-kit/advanced.lua",
+        "lua/loop-kit/ui/board.lua",
+        "lua/loop-kit/edit.lua",
+        "tests/unit/ui_confirm_spec.lua",
+        "tests/render/ui_confirm_spec.lua"
+      ]
+    },
+    "#22": {
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-22T22-58-26-item-18-manual-22.md",
+      "blockedReason": "需真机/人工：人工（manual）"
     }
   }
 }
