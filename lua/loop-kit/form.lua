@@ -57,15 +57,26 @@ local function dedupe(list)
   return out
 end
 
+local function is_null(value)
+  return value == nil or value == vim.NIL
+end
+
+local function optional_text(value)
+  if is_null(value) or value == "" then
+    return nil
+  end
+  return value
+end
+
 local function deps_list(value)
-  if value == nil then
+  if is_null(value) then
     return {}
   end
   if type(value) == "string" then
     value = util.split(value, ",")
   end
   local out = {}
-  for _, raw in ipairs(value) do
+  for _, raw in ipairs(type(value) == "table" and value or {}) do
     local id = util.normalize_id(tostring(raw))
     if id then
       out[#out + 1] = id
@@ -313,20 +324,22 @@ function M.serialize(fields)
   else
     lines[#lines + 1] = "<!-- loopkit:task id=" .. fields.id .. " -->"
   end
-  lines[#lines + 1] = "# " .. (fields.title or "")
+  lines[#lines + 1] = "# " .. (optional_text(fields.title) or "")
   lines[#lines + 1] = ""
   lines[#lines + 1] = "<!-- loopkit:meta"
-  lines[#lines + 1] = "tag: " .. (fields.tag or "")
+  lines[#lines + 1] = "tag: " .. (optional_text(fields.tag) or "")
   if #deps > 0 then
     lines[#lines + 1] = "deps: " .. table.concat(deps, ", ")
   end
-  if fields.doc and fields.doc ~= "" then
-    lines[#lines + 1] = "doc: " .. fields.doc
+  local doc = optional_text(fields.doc)
+  if doc then
+    lines[#lines + 1] = "doc: " .. doc
   end
   lines[#lines + 1] = "-->"
   lines[#lines + 1] = ""
-  if fields.desc and fields.desc ~= "" then
-    for _, line in ipairs(vim.split(fields.desc, "\n", { plain = true })) do
+  local desc = optional_text(fields.desc)
+  if desc then
+    for _, line in ipairs(vim.split(desc, "\n", { plain = true })) do
       lines[#lines + 1] = line
     end
   end
@@ -360,8 +373,8 @@ function M.plan(parsed, baseline)
     title = title,
     tag = tag,
     deps = deps_list(parsed.deps),
-    doc = parsed.doc,
-    desc = parsed.desc or "",
+    doc = optional_text(parsed.doc),
+    desc = optional_text(parsed.desc) or "",
   }
   plan.fields = fields
 
@@ -388,18 +401,18 @@ function M.plan(parsed, baseline)
 
   local id = parsed.id or baseline.id
   local base_deps = deps_list(baseline.deps)
-  local base_doc = baseline.doc
-  if base_doc == "" then
-    base_doc = nil
-  end
+  local base_doc = optional_text(baseline.doc)
+  local base_title = optional_text(baseline.title) or ""
+  local base_tag = optional_text(baseline.tag) or ""
+  local base_desc = optional_text(baseline.desc) or ""
 
   local args = { id }
   local stdin
-  if fields.title ~= (baseline.title or "") then
+  if fields.title ~= base_title then
     args[#args + 1] = "--title"
     args[#args + 1] = fields.title
   end
-  if fields.tag ~= (baseline.tag or "") then
+  if fields.tag ~= base_tag then
     args[#args + 1] = "--tag"
     args[#args + 1] = fields.tag
   end
@@ -411,7 +424,7 @@ function M.plan(parsed, baseline)
     args[#args + 1] = "--doc"
     args[#args + 1] = fields.doc
   end
-  if fields.desc ~= (baseline.desc or "") then
+  if fields.desc ~= base_desc then
     args[#args + 1] = "--desc-file"
     args[#args + 1] = "-"
     stdin = fields.desc
@@ -504,7 +517,7 @@ local function baseline_for_result(state, fields, result)
   baseline.title = fields.title
   baseline.tag = fields.tag
   baseline.deps = util.deepcopy(fields.deps)
-  baseline.doc = fields.doc
+  baseline.doc = optional_text(fields.doc)
   baseline.desc = fields.desc
   if type(result) == "table" and result.id then
     baseline.id = result.id
@@ -722,8 +735,8 @@ function M.open(opts)
       title = task.title or "",
       tag = task.tag or "",
       deps = deps_list(task.deps),
-      doc = task.doc,
-      desc = task.desc or "",
+      doc = optional_text(task.doc),
+      desc = optional_text(task.desc) or "",
     }
   end
 

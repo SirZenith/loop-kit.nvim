@@ -40,6 +40,23 @@ describe("form parse and serialize", function()
     eq(baseline.desc, parsed.desc)
   end)
 
+  it("normalizes JSON null fields without concatenating userdata", function()
+    local baseline = task({ doc = vim.NIL, deps = vim.NIL, desc = vim.NIL })
+    local text = form.serialize(baseline)
+
+    falsy(text:find("doc:", 1, true), "null doc is omitted")
+    falsy(text:find("deps:", 1, true), "null deps are omitted")
+    local parsed = form.parse(text)
+    eq({}, parsed.errors)
+    eq(nil, parsed.doc)
+    eq({}, parsed.deps)
+    eq("", parsed.desc)
+
+    local plan = form.plan(parsed, baseline)
+    truthy(plan.ok)
+    eq(0, #plan.calls)
+  end)
+
   it("keeps headings after the title inside the description", function()
     local parsed = form.parse({
       "<!-- loopkit:task id=#12 -->",

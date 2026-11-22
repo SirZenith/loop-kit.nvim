@@ -84,6 +84,17 @@ describe("form buffers", function()
     match(vim.api.nvim_buf_get_name(s.buf), "loopkit:///tmp/loopkit%-form%-render/task/%%2312$")
   end)
 
+  it("opens tasks whose JSON null fields decode as vim.NIL", function()
+    local s = open({ task = task({ doc = vim.NIL, deps = vim.NIL, desc = vim.NIL }) })
+    local lines = vim.api.nvim_buf_get_lines(s.buf, 0, -1, false)
+    local text = table.concat(lines, "\n")
+
+    falsy(text:find("doc:", 1, true))
+    falsy(text:find("deps:", 1, true))
+    truthy(text:find("# 标题", 1, true))
+    form.cancel(s.buf)
+  end)
+
   it("submits only through BufWriteCmd and never writes a real file", function()
     local s = open({ task = task() })
     local name = vim.api.nvim_buf_get_name(s.buf)
