@@ -218,6 +218,20 @@
         "README.md",
         "doc/loop-kit.txt"
       ]
+    },
+    "#15": {
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-22T19-31-59-path-completion.md",
+      "hash": "e454f4f",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/path_complete.lua",
+        "lua/loop-kit/ui/board.lua",
+        "lua/loop-kit/edit.lua",
+        "tests/unit/path_complete_spec.lua",
+        "tests/fake-dom/edit_spec.lua",
+        "README.md",
+        "doc/loop-kit.txt"
+      ]
     }
   }
 }
