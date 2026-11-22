@@ -368,7 +368,11 @@ function M.open(opts)
   vim.bo[buf].modified = false
   pcall(vim.api.nvim_buf_set_name, buf, name)
   if target.kind == "touch" then
-    path_complete.attach_omnifunc(buf, root, { allow_absolute = false })
+    path_complete.attach_omnifunc(buf, root, {
+      allow_absolute = false,
+      allow_parent = true,
+      normalize_parent = true,
+    })
   end
 
   if valid_win(opts.detail_win) then

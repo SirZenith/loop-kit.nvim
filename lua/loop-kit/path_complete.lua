@@ -24,11 +24,15 @@ end
 --- List one directory level below `root`, filtered by the last path segment.
 ---
 --- `lead` may keep a `./` prefix; it is preserved on every candidate so the
---- user's spelling survives completion. Parent segments (`..`), backslashes
---- and absolute inputs (unless `opts.allow_absolute`) never produce candidates.
+--- user's spelling survives completion. Parent segments (`..`) are rejected
+--- unless `opts.allow_absolute` or `opts.allow_parent` is true. With
+--- `opts.normalize_parent`, `..` is only used to navigate: candidates are
+--- rewritten relative to the project root and paths that escape it are
+--- dropped. Backslashes and absolute inputs (unless allowed) never produce
+--- candidates.
 ---@param root string project root
 ---@param lead string current input
----@param opts? { allow_absolute?: boolean }
+---@param opts? { allow_absolute?: boolean, allow_parent?: boolean, normalize_parent?: boolean }
 ---@return string[]
 function M.complete(root, lead, opts)
   opts = opts or {}
@@ -38,7 +42,10 @@ function M.complete(root, lead, opts)
   if type(lead) ~= "string" then
     lead = ""
   end
-  if lead:find("\\", 1, true) or has_parent_segment(lead) then
+  if lead:find("\\", 1, true) then
+    return {}
+  end
+  if has_parent_segment(lead) and not opts.allow_absolute and not opts.allow_parent then
     return {}
   end
 
@@ -67,14 +74,25 @@ function M.complete(root, lead, opts)
   end
 
   local base = root:gsub("/+$", "")
+  local display_dir = dir_part
   local scan_dir = dir_part == "" and base or (base .. "/" .. dir_part)
+
+  if opts.normalize_parent and dir_part ~= "" and has_parent_segment(dir_part) then
+    local normalized = vim.fs.normalize(base .. "/" .. dir_part)
+    if normalized ~= base and normalized:sub(1, #base + 1) ~= base .. "/" then
+      return {}
+    end
+    display_dir = normalized == base and "" or (normalized:sub(#base + 2) .. "/")
+    scan_dir = normalized
+  end
+
   local show_hidden = prefix:sub(1, 1) == "."
   local results = {}
 
   local ok = pcall(function()
     for name, kind in vim.fs.dir(scan_dir, { depth = 1 }) do
       if name:sub(1, #prefix) == prefix and (show_hidden or name:sub(1, 1) ~= ".") then
-        local candidate = dir_part .. name
+        local candidate = display_dir .. name
         if kind == "directory" then
           candidate = candidate .. "/"
         end
@@ -116,16 +134,20 @@ function M.omnifunc(findstart, base)
   end
   return M.complete(root, base or "", {
     allow_absolute = vim.b.loopkit_path_allow_absolute == true,
+    allow_parent = vim.b.loopkit_path_allow_parent == true,
+    normalize_parent = vim.b.loopkit_path_normalize_parent == true,
   })
 end
 
 --- Attach the project-root context and `omnifunc` to an edit buffer.
 ---@param buf integer
 ---@param root string
----@param opts? { allow_absolute?: boolean }
+---@param opts? { allow_absolute?: boolean, allow_parent?: boolean, normalize_parent?: boolean }
 function M.attach_omnifunc(buf, root, opts)
   vim.b[buf].loopkit_path_root = root
   vim.b[buf].loopkit_path_allow_absolute = (opts and opts.allow_absolute) == true
+  vim.b[buf].loopkit_path_allow_parent = (opts and opts.allow_parent) == true
+  vim.b[buf].loopkit_path_normalize_parent = (opts and opts.normalize_parent) == true
   vim.bo[buf].omnifunc = "v:lua.LoopKitPathOmnifunc"
 end
 
