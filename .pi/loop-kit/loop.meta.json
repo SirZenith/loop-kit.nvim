@@ -274,6 +274,7 @@
     },
     "#21": {
       "doc": ".pi/loop-kit/docs/nvim/2026-11-22T22-58-23-item-18.md",
+      "hash": "bf47dd51e21a3d651ddb6742a52f0b29ff66e216",
       "flow": "spec-impl",
       "branch": "pi-wt/loop-21-607716b8",
       "baseSha": "65f8032af49f3878c4c62ef1ba48fd77523b8e46",
