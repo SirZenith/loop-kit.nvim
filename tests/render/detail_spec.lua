@@ -67,10 +67,55 @@ describe("ui.detail: readonly markdown view", function()
     eq("- touch:", line_with(lines, "- touch:"))
     truthy(line_with(lines, "  - lua/loop-kit/ui/detail.lua"))
     eq("- meta: branch=main baseSha=abc123", line_with(lines, "- meta:"))
+    for _, range in ipairs(rendered.highlights) do
+      if range.line == rendered.fields.desc_content then
+        neq("LoopKitDetailMuted", range.hl_group, "right-pane description keeps markdown colours")
+      end
+    end
     match(table.concat(lines, "\n"), "First line%.\nSecond line%.")
   end)
 
-  it("appends the decide/analysis block when analysis is provided", function()
+  it("renders prompt paths, description and prompt sections with highlights", function()
+    local detail, buf = make_detail()
+    local task = vim.tbl_extend("force", TASK, {
+      docParent = "docs/parent.md",
+      specPrompt = "prompts/spec.md",
+      researchPrompt = "prompts/research.md",
+      codePrompt = "prompts/code.md",
+      verifyPrompt = "prompts/verify.md",
+      docTaskSplitPrompt = "prompts/split.md",
+      userPrompt = "先保证兼容。",
+      stagePrompt = { verify = "跑全量测试。", spec = "先写文档。" },
+      desc = "",
+    })
+
+    local rendered = detail:render(task, { ["#2"] = DEP })
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+
+    eq("- docParent: docs/parent.md", line_with(lines, "- docParent:"))
+    eq("- specPrompt: prompts/spec.md", line_with(lines, "- specPrompt:"))
+    eq("- researchPrompt: prompts/research.md", line_with(lines, "- researchPrompt:"))
+    eq("- codePrompt: prompts/code.md", line_with(lines, "- codePrompt:"))
+    eq("- verifyPrompt: prompts/verify.md", line_with(lines, "- verifyPrompt:"))
+    eq("- docTaskSplitPrompt: prompts/split.md", line_with(lines, "- docTaskSplitPrompt:"))
+    eq("# 任务描述", line_with(lines, "# 任务描述"))
+    eq("暂无内容", lines[rendered.fields.desc_content])
+    eq("# 用户提示词", line_with(lines, "# 用户提示词"))
+    eq("先保证兼容。", lines[rendered.fields.userPrompt_content])
+    eq("# 各阶段提示词", line_with(lines, "# 各阶段提示词"))
+    eq("## spec", line_with(lines, "## spec"))
+    eq("先写文档。", lines[rendered.fields["stagePrompt.spec.content"]])
+    eq("## verify", line_with(lines, "## verify"))
+    eq("跑全量测试。", lines[rendered.fields["stagePrompt.verify.content"]])
+
+    truthy(#rendered.highlights > 0, "detail returns highlight ranges")
+    local ns = vim.api.nvim_get_namespaces()["loop-kit-ui-detail"]
+    truthy(ns, "detail namespace exists")
+    local marks = vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, { details = true })
+    truthy(#marks > 0, "highlight ranges are applied as extmarks")
+  end)
+
+  it("places the decide/analysis block after metadata behind a rule", function()
     local detail, buf = make_detail()
     local analysis = {
       target = "#5",
@@ -82,15 +127,24 @@ describe("ui.detail: readonly markdown view", function()
     local rendered = detail:render(TASK, { ["#2"] = DEP }, analysis, { TASK, DEP })
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 
+    local meta_line = rendered.fields.meta
+    eq("", lines[meta_line + 1])
+    eq("---", lines[meta_line + 2])
+    eq("", lines[meta_line + 3])
+    eq(meta_line + 4, rendered.fields.decide)
+    eq(rendered.fields.decide + 1, rendered.fields.analysis)
+    truthy(rendered.fields.desc > rendered.fields.analysis, "description follows the metadata block")
+
     local decide_line = line_with(lines, "- decide:")
     truthy(decide_line)
     match(decide_line, "#5")
     match(decide_line, "未完成 2 项")
     match(decide_line, "未满足依赖")
-    eq(
-      "- analysis: outstanding=2 eligible=false blocked=true stuck=false",
-      line_with(lines, "- analysis:")
-    )
+    eq("- analysis:", line_with(lines, "- analysis:"))
+    eq("  - outstanding: 2", lines[rendered.fields.analysis + 1])
+    eq("  - eligible: false", lines[rendered.fields.analysis + 2])
+    eq("  - blocked: true", lines[rendered.fields.analysis + 3])
+    eq("  - stuck: false", lines[rendered.fields.analysis + 4])
     truthy(rendered.fields.decide)
     truthy(rendered.fields.analysis)
     eq(false, vim.bo[buf].modifiable)
@@ -100,7 +154,7 @@ describe("ui.detail: readonly markdown view", function()
     local detail, buf = make_detail()
     detail:render(nil)
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-    eq("未选择任务", lines[1])
+    eq("# 未选择任务", lines[1])
     eq(false, vim.bo[buf].modifiable)
   end)
 

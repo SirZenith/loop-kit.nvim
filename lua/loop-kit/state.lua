@@ -5,6 +5,36 @@ local M = {}
 
 local GROUP_ORDER = { "doing", "pending", "blocked", "done" }
 local OPEN_STATUS = { pending = true, doing = true, blocked = true }
+local SORT_MODES = { "id_desc", "id_asc", "closed_desc", "closed_asc", "status" }
+
+M.SORT_MODES = SORT_MODES
+
+local function is_flat_sort(sort)
+  return sort ~= "status" and sort ~= "title"
+end
+
+M.is_flat_sort = is_flat_sort
+
+local function closed_key(task)
+  local value = task.closedAt
+  if type(value) ~= "string" then
+    return nil
+  end
+  local year, month, day, hour, minute, second =
+    value:match("^%s*(%d+)%.(%d+)%.(%d+)%s+(%d+):(%d+):(%d+)%s*$")
+  if not year then
+    return nil
+  end
+  return os.time({
+    year = tonumber(year),
+    month = tonumber(month),
+    day = tonumber(day),
+    hour = tonumber(hour),
+    min = tonumber(minute),
+    sec = tonumber(second),
+    isdst = false,
+  })
+end
 
 local function matches(task, filter, query)
   if filter == "open" then
@@ -38,6 +68,42 @@ function State:_visible()
     if matches(task, self.filter, self.query) then
       visible[#visible + 1] = task
     end
+  end
+
+  local sort = self.sort or "id_desc"
+  if sort == "id_asc" or sort == "id_desc" then
+    table.sort(visible, function(a, b)
+      local cmp = util.compare_ids(a.id, b.id)
+      if cmp == 0 then
+        return false
+      end
+      if sort == "id_desc" then
+        return cmp > 0
+      end
+      return cmp < 0
+    end)
+    return visible
+  end
+
+  if sort == "closed_asc" or sort == "closed_desc" then
+    table.sort(visible, function(a, b)
+      local ka = closed_key(a)
+      local kb = closed_key(b)
+      if ka == nil and kb == nil then
+        return util.compare_ids(a.id, b.id) < 0
+      elseif ka == nil then
+        return false
+      elseif kb == nil then
+        return true
+      elseif ka ~= kb then
+        if sort == "closed_asc" then
+          return ka < kb
+        end
+        return ka > kb
+      end
+      return util.compare_ids(a.id, b.id) < 0
+    end)
+    return visible
   end
 
   local order = {}
@@ -146,10 +212,18 @@ function State:set_query(query)
   return self
 end
 
---- Change the within-group ordering ("status" by id, "title" by title).
+--- Change the task ordering; unknown modes fall back to id_desc.
 function State:set_sort(sort)
   local previous = self:_ids()
-  self.sort = sort or "status"
+  sort = sort or "id_desc"
+  local valid = sort == "title"
+  for _, mode in ipairs(SORT_MODES) do
+    if mode == sort then
+      valid = true
+      break
+    end
+  end
+  self.sort = valid and sort or "id_desc"
   self:_restore(previous)
   return self
 end
@@ -174,6 +248,10 @@ end
 
 function State:groups()
   local visible = self:_visible()
+  if is_flat_sort(self.sort) then
+    return { { status = nil, tasks = visible } }
+  end
+
   local index = {}
   local extras = {}
   for _, status in ipairs(GROUP_ORDER) do
@@ -287,7 +365,7 @@ function Manager:get(root)
     st = setmetatable({
       root = key,
       filter = "open",
-      sort = "status",
+      sort = "id_desc",
       query = "",
       tasks = {},
       _selected_id = nil,

@@ -82,6 +82,7 @@ describe("actions exact argv", function()
   it("claims with --json and an explicit project root, then refreshes the list", function()
     local f, source, st, act = harness()
     seed(source, st, { task("#12", "pending"), task("#13", "pending") })
+    st:select("#12")
     f:respond("claim", { stdout = json(task("#12", "doing")) })
     f:respond("list", {
       stdout = json({
@@ -195,8 +196,8 @@ describe("actions remove confirmation", function()
     match(asked[1] or "", "永久删除")
     match(asked[1] or "", "依赖")
     eq(full_argv(f, "remove", { "#12" }), f:call(1).argv)
-    -- deletion selects the following visible task
-    eq("#13", st:selected_id())
+    -- deletion selects the next row (descending id order)
+    eq("#10", st:selected_id())
     eq({ "#10", "#13" }, ids(st.tasks))
   end)
 

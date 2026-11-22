@@ -71,6 +71,14 @@ local function apply_highlights(buf, rendered)
   for line, hl in pairs(rendered.line_hl or {}) do
     pcall(vim.api.nvim_buf_add_highlight, buf, ns, hl, line - 1, 0, -1)
   end
+  for _, range in ipairs(rendered.ranges or {}) do
+    local line_text = rendered.lines[range.line] or ""
+    pcall(vim.api.nvim_buf_set_extmark, buf, ns, range.line - 1, range.col_start, {
+      end_col = math.min(range.col_end, #line_text),
+      hl_group = range.hl_group,
+      priority = 200,
+    })
+  end
 end
 
 --- Show a one-line key hint above the rows (and above notices).
@@ -91,6 +99,11 @@ local function shift_rendered(rendered, offset)
     line_hl[line + offset] = hl
   end
   rendered.line_map, rendered.id_to_line, rendered.line_hl = line_map, id_to_line, line_hl
+  local ranges = {}
+  for _, range in ipairs(rendered.ranges or {}) do
+    ranges[#ranges + 1] = vim.tbl_extend("force", range, { line = range.line + offset })
+  end
+  rendered.ranges = ranges
   if rendered.selected_line then
     rendered.selected_line = rendered.selected_line + offset
   end
@@ -122,6 +135,8 @@ function List:draw(opts)
     icons = self.icons,
     selected_id = self.state:selected_id(),
     sort = self.sort,
+    flat = self.state.sort ~= "status" and self.state.sort ~= "title",
+    presorted = true,
   })
   if self.hint and self.hint ~= "" then
     table.insert(rendered.lines, 1, "")

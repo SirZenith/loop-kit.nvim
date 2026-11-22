@@ -62,7 +62,8 @@ j k、<Down> 或 <Up>      上下移动
 <CR>                    聚焦当前任务的详情窗
 /                       关键字筛选（匹配 id/title/tag/desc，大小写不敏感）
 <Esc>                   清除关键字
-s / S                   循环状态筛选 / 直接显示全部
+s / A                   循环状态筛选 / 直接显示全部
+S                       循环排序（id_desc/id_asc/closed_desc/closed_asc/status）
 r / R                   读取缓存（--no-sync） / 完整同步
 c                       认领（claim）
 d                       完成（done，受依赖门禁约束）
@@ -76,8 +77,9 @@ n                       decide 推荐
 ?                       打开/关闭帮助浮窗
 q                       关闭看板 tab
 
-默认筛选 open（pending/doing/blocked），分组顺序 doing -> pending -> blocked
--> done，组内按数字 id 升序。详情窗里也可使用 q、?、o、e。
+默认筛选 open（pending/doing/blocked），默认按数字 id 降序平铺；按 S 可切换
+id_desc -> id_asc -> closed_desc -> closed_asc -> status，status 模式按
+doing -> pending -> blocked -> done 分组。详情窗里也可使用 q、?、o、e。
 
 所有键位可用 setup({ keys = ... }) 覆盖或设为 false 禁用；动作名与上表行为
 同名，例如 move_up、move_down、open_detail、filter_prompt、clear_query、cycle_filter、
@@ -94,7 +96,9 @@ open_doc、flow、private、touch、meta、decide、help、close。插件不写�
     auto_sync = true,        -- 打开/刷新时后台完整同步（仅远端访问网络）
     list_width = 38,         -- 左窗宽度
     default_filter = "open", -- open/all/pending/doing/blocked/done
-    sort = "status",         -- "status"（组内按 id）或 "title"（组内按标题）
+    sort = "id_desc",        -- id_desc/id_asc/closed_desc/closed_asc/status/title
+    show_winbar = true,      -- 左窗是否显示 winbar（右窗始终显示）
+    show_hint = true,        -- 左窗是否显示顶部键位提示行
     icons = { pending = "○", doing = "◐", done = "●", blocked = "✕" },
     confirm = { done = true, force_done = true, block = true, remove = true },
     keys = {},               -- lhs -> 动作名；false 表示禁用
@@ -196,9 +200,12 @@ local 删除与远端移出：
   User LoopKitAction    data = { root, id, action, ok, error }
 用户取消不触发 LoopKitAction。
 
-高亮组均以 default = true 定义：LoopKitPending、LoopKitDoing、LoopKitDone、
-LoopKitBlocked、LoopKitId、LoopKitTitle、LoopKitTag、LoopKitMuted、
-LoopKitHeader、LoopKitError、LoopKitSelected。
+高亮组均以 default = true 定义并链接到内置组：LoopKitPending、LoopKitDoing、
+LoopKitDone、LoopKitBlocked、LoopKitId、LoopKitTitle、LoopKitTag、
+LoopKitMuted、LoopKitHeader、LoopKitError、LoopKitSelected，以及详情窗的
+LoopKitDetailTitle、LoopKitDetailSection、LoopKitDetailKey、LoopKitDetailValue、
+LoopKitDetailPath、LoopKitDetailMuted、LoopKitDetailId、LoopKitDetailTag。
+打开看板时自动定义，无需调用 setup()。
 
 ==============================================================================
 9. 健康检查与错误                                                *loop-kit-health*

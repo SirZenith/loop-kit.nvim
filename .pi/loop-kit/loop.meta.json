@@ -146,6 +146,10 @@
         "doc/loop-kit.txt",
         ".gitea/workflows/nvim.yml"
       ]
+    },
+    "#10": {
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-22T13-08-46-ui-display-style.md",
+      "flow": "quick"
     }
   }
 }

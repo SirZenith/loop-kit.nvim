@@ -12,6 +12,7 @@ local Detail = {}
 Detail.__index = Detail
 
 local PLACEHOLDER = "未选择任务"
+local ns = vim.api.nvim_create_namespace("loop-kit-ui-detail")
 
 local function valid_buf(buf)
   return buf ~= nil and vim.api.nvim_buf_is_valid(buf)
@@ -34,6 +35,24 @@ local function write_lines(buf, lines)
     vim.bo[buf].modified = false
   end)
   return ok, err
+end
+
+local function apply_highlights(buf, rendered)
+  if not valid_buf(buf) then
+    return
+  end
+  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  if not rendered then
+    return
+  end
+  for _, range in ipairs(rendered.highlights or {}) do
+    local line_text = rendered.lines[range.line] or ""
+    pcall(vim.api.nvim_buf_set_extmark, buf, ns, range.line - 1, range.col_start, {
+      end_col = math.min(range.col_end, #line_text),
+      hl_group = range.hl_group,
+      priority = 200,
+    })
+  end
 end
 
 --- Create a detail pane.
@@ -69,40 +88,44 @@ function Detail:render(task, tasks_by_id, analysis, tasks)
   if not task then
     return self:placeholder(PLACEHOLDER)
   end
-  local rendered = render.detail(task, { tasks_by_id = tasks_by_id })
+  local explain = nil
   if analysis and type(analysis) == "table" then
-    local explain = require("loop-kit.decide").explain(analysis, task, tasks or {})
+    explain = require("loop-kit.decide").explain(analysis, task, tasks or {})
+  end
+  local rendered = render.detail(task, { tasks_by_id = tasks_by_id, analysis = explain })
+  if explain then
     rendered.analysis = explain
-    local function push(text)
-      rendered.lines[#rendered.lines + 1] = text
-      return #rendered.lines
-    end
-    push("")
-    rendered.fields.decide = push("- decide: " .. tostring(explain.summary or ""))
-    rendered.fields.analysis = push(string.format(
-      "- analysis: outstanding=%d eligible=%s blocked=%s stuck=%s",
-      tonumber(explain.outstanding) or 0,
-      tostring(explain.eligible == true),
-      tostring(explain.blocked == true),
-      tostring(explain.stuck == true)
-    ))
   end
   self.rendered = rendered
   local ok = write_lines(self.buf, rendered.lines)
   if not ok then
     return nil
   end
+  apply_highlights(self.buf, rendered)
   return rendered
 end
 
 function Detail:placeholder(text)
   self.task = nil
   self.rendered = nil
-  write_lines(self.buf, {
-    text or PLACEHOLDER,
-    "",
-    "从上方的任务列表选择一条任务。",
-  })
+  local rendered = {
+    lines = { "# " .. (text or PLACEHOLDER), "", "从上方的任务列表选择一条任务。" },
+    highlights = {},
+  }
+  rendered.highlights[1] = {
+    line = 1,
+    col_start = 0,
+    col_end = #rendered.lines[1],
+    hl_group = "LoopKitDetailTitle",
+  }
+  rendered.highlights[2] = {
+    line = 3,
+    col_start = 0,
+    col_end = #rendered.lines[3],
+    hl_group = "LoopKitDetailMuted",
+  }
+  write_lines(self.buf, rendered.lines)
+  apply_highlights(self.buf, rendered)
   return nil
 end
 

@@ -103,7 +103,8 @@ Plug 'https://git.dispersion.cc/Dispersion/loop-kit.nvim.git'
 | `<CR>` | 聚焦当前任务的详情窗 |
 | `/` | 输入关键字（匹配 id/title/tag/desc，大小写不敏感） |
 | `<Esc>` | 清除关键字 |
-| `s` / `S` | 循环状态筛选（open → all → pending → doing → blocked → done）/ 直接显示全部 |
+| `s` / `A` | 循环状态筛选（open → all → pending → doing → blocked → done）/ 直接显示全部 |
+| `S` | 循环排序（id_desc → id_asc → closed_desc → closed_asc → status） |
 | `r` / `R` | 读取缓存（`--no-sync`）/ 完整同步 |
 | `c` | claim 当前任务 |
 | `d` | done（受依赖门禁约束） |
@@ -117,8 +118,9 @@ Plug 'https://git.dispersion.cc/Dispersion/loop-kit.nvim.git'
 | `?` | 打开/关闭帮助浮窗 |
 | `q` | 关闭看板 tab |
 
-默认筛选是 `open`（pending/doing/blocked），按 doing → pending → blocked → done
-分组，组内按数字 id 升序。详情窗里也可使用 `q`、`?`、`o`、`e`。
+默认筛选是 `open`（pending/doing/blocked），默认按数字 id 降序平铺。按 `S` 可在
+`id_desc → id_asc → closed_desc → closed_asc → status` 之间切换；`status` 模式按
+doing → pending → blocked → done 分组。详情窗里也可使用 `q`、`?`、`o`、`e`。
 
 同一项目的写操作串行执行（FIFO）；切换筛选和只读刷新不会被写请求阻塞，但写完成前
 不会用旧列表覆盖成功响应。写失败保留当前选中、筛选与表单内容。
@@ -132,7 +134,9 @@ require("loop-kit").setup({
   auto_sync = true,        -- 打开/刷新时是否后台完整同步（仅远端源访问网络）
   list_width = 38,         -- 左窗宽度
   default_filter = "open", -- open/all/pending/doing/blocked/done
-  sort = "status",         -- "status"（组内按 id）或 "title"（组内按标题）
+  sort = "id_desc",        -- id_desc/id_asc/closed_desc/closed_asc/status/title
+  show_winbar = true,      -- 左窗是否显示 winbar（右窗始终显示）
+  show_hint = true,        -- 左窗是否显示顶部键位提示行
   icons = { pending = "○", doing = "◐", done = "●", blocked = "✕" },
   confirm = { done = true, force_done = true, block = true, remove = true },
   keys = {},               -- lhs → 动作名；false 表示禁用
@@ -152,7 +156,7 @@ require("loop-kit").setup({
 ```
 
 可用动作名与默认键位表中的行为一致：`move_up`、`move_down`、`open_detail`、
-`filter_prompt`、`clear_query`、`cycle_filter`、`filter_all`、`refresh`、`sync`、
+`filter_prompt`、`clear_query`、`cycle_filter`、`filter_all`、`cycle_sort`、`refresh`、`sync`、
 `claim`、`done`、`force_done`、`block`、`edit`、`add`、`remove`、`open_doc`、
 `flow`、`private`、`touch`、`meta`、`decide`、`help`、`close`。插件不写任何全局
 键位。
@@ -263,7 +267,11 @@ loop.reset()
 
 高亮组：`LoopKitPending`、`LoopKitDoing`、`LoopKitDone`、`LoopKitBlocked`、
 `LoopKitId`、`LoopKitTitle`、`LoopKitTag`、`LoopKitMuted`、`LoopKitHeader`、
-`LoopKitError`、`LoopKitSelected`。
+`LoopKitError`、`LoopKitSelected`，以及详情窗的 `LoopKitDetailTitle`、
+`LoopKitDetailSection`、`LoopKitDetailKey`、`LoopKitDetailValue`、`LoopKitDetailPath`、
+`LoopKitDetailMuted`、`LoopKitDetailId`、`LoopKitDetailTag`。
+它们默认链接到 `Comment`、`Identifier`、`Title`、`Special`、`String`、`Visual` 等
+内置组；打开看板时会自动定义，无需调用 `setup()`。
 
 ## 健康检查与故障排查
 

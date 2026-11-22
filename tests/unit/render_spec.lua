@@ -31,10 +31,12 @@ local function new_state(tasks, filter)
 end
 
 local function mapped_ids(out)
-  local ids = {}
+  local ids, seen = {}, {}
   for line = 1, #out.lines do
-    if out.line_map[line] then
-      ids[#ids + 1] = out.line_map[line]
+    local id = out.line_map[line]
+    if id and not seen[id] then
+      seen[id] = true
+      ids[#ids + 1] = id
     end
   end
   return ids
@@ -51,13 +53,16 @@ end
 
 describe("render.list", function()
   it("renders grouped rows with status icons, ids, titles and tags", function()
-    local out = render.list(new_state():groups())
+    local st = new_state()
+    st:set_sort("status")
+    local out = render.list(st:groups())
 
     local doing = out.id_to_line["#3"]
     truthy(doing, "doing task row missing")
-    match(out.lines[doing], "third", "title missing from row")
-    match(out.lines[doing], "cli", "tag missing from row")
+    match(out.lines[doing], "#3", "id missing from first row")
     match(out.lines[doing], "◐", "doing icon missing")
+    match(out.lines[doing], "cli", "tag missing from first row")
+    match(out.lines[doing + 1], "third", "title missing from second row")
 
     local pending = out.id_to_line["#2"]
     match(out.lines[pending], "○", "pending icon missing")
@@ -82,14 +87,16 @@ describe("render.list", function()
   end)
 
   it("orders each group by numeric id and maps every task row once", function()
-    local out = render.list(new_state():groups())
+    local st = new_state()
+    st:set_sort("status")
+    local out = render.list(st:groups())
 
     eq({ "#3", "#2", "#10", "#11", "#1" }, mapped_ids(out))
-    eq(5, vim.tbl_count(out.line_map))
+    eq(10, vim.tbl_count(out.line_map))
 
     for id, line in pairs(out.id_to_line) do
       eq(id, out.line_map[line], "id_to_line must agree with line_map")
-      match(out.lines[line], id, "row text must carry its id")
+      match(out.lines[line], id, "first row must carry its id")
     end
   end)
 
@@ -100,7 +107,7 @@ describe("render.list", function()
       task("#2", "pending", { title = string.rep("wide ", 200) }),
     }):groups())
 
-    eq(2, vim.tbl_count(out.line_map))
+    eq(4, vim.tbl_count(out.line_map))
     eq("#1", out.line_map[out.id_to_line["#1"]])
     eq("#2", out.line_map[out.id_to_line["#2"]])
     truthy(find_line(out.lines, long), "full long title must be rendered")
@@ -129,7 +136,7 @@ describe("render.detail", function()
     local empty = render.detail(task("#8", "pending"))
     local text = table.concat(empty.lines, "\n")
     match(text, "deps: %(none%)", "empty deps must be explicit")
-    match(text, "doc: %(none%)", "missing doc must be explicit")
+    match(text, "doc: %(未设置%)", "missing doc must be explicit")
   end)
 
   it("distinguishes unknown touch from an empty touch array", function()
@@ -189,9 +196,9 @@ end)
 describe("loop-kit highlights", function()
   local links = {
     LoopKitPending = "Comment",
-    LoopKitDoing = "Constant",
+    LoopKitDoing = "WarningMsg",
     LoopKitDone = "String",
-    LoopKitBlocked = "WarningMsg",
+    LoopKitBlocked = "Constant",
     LoopKitId = "Identifier",
     LoopKitTitle = "Title",
     LoopKitTag = "Special",

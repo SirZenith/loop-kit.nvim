@@ -5,9 +5,9 @@ local M = {}
 
 M.links = {
   LoopKitPending = "Comment",
-  LoopKitDoing = "Constant",
+  LoopKitDoing = "WarningMsg",
   LoopKitDone = "String",
-  LoopKitBlocked = "WarningMsg",
+  LoopKitBlocked = "Constant",
   LoopKitId = "Identifier",
   LoopKitTitle = "Title",
   LoopKitTag = "Special",
@@ -15,6 +15,14 @@ M.links = {
   LoopKitHeader = "Label",
   LoopKitError = "ErrorMsg",
   LoopKitSelected = "Visual",
+  LoopKitDetailTitle = "Title",
+  LoopKitDetailSection = "Title",
+  LoopKitDetailKey = "Comment",
+  LoopKitDetailValue = "Normal",
+  LoopKitDetailPath = "String",
+  LoopKitDetailMuted = "Comment",
+  LoopKitDetailId = "Identifier",
+  LoopKitDetailTag = "Special",
 }
 
 --- Define every default group. Safe to call more than once.
@@ -23,5 +31,15 @@ function M.setup()
     vim.api.nvim_set_hl(0, name, { link = link, default = true })
   end
 end
+
+-- Re-add the links if a colorscheme clears them after the board was loaded.
+local augroup = vim.api.nvim_create_augroup("LoopKitHighlights", { clear = true })
+vim.api.nvim_create_autocmd("ColorScheme", {
+  group = augroup,
+  callback = function()
+    M.setup()
+  end,
+  desc = "Re-apply loop-kit highlight links",
+})
 
 return M

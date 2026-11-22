@@ -29,7 +29,9 @@ local function defaults()
     auto_sync = true,
     list_width = 38,
     default_filter = "open",
-    sort = "status",
+    sort = "id_desc",
+    show_winbar = true,
+    show_hint = true,
     icons = {
       pending = "○",
       doing = "◐",
@@ -62,6 +64,8 @@ function M.setup(opts)
     list_width = M._config.list_width,
     default_filter = M._config.default_filter,
     sort = M._config.sort,
+    show_winbar = M._config.show_winbar,
+    show_hint = M._config.show_hint,
     auto_sync = M._config.auto_sync,
     icons = M._config.icons,
     keys = M._config.keys,
@@ -79,6 +83,8 @@ function M.reset()
     list_width = M._config.list_width,
     default_filter = M._config.default_filter,
     sort = M._config.sort,
+    show_winbar = M._config.show_winbar,
+    show_hint = M._config.show_hint,
     auto_sync = M._config.auto_sync,
     icons = M._config.icons,
     keys = M._config.keys,
@@ -213,6 +219,12 @@ function M.open(opts)
   opts.list_width = opts.list_width or M._config.list_width
   opts.default_filter = opts.default_filter or M._config.default_filter
   opts.sort = opts.sort or M._config.sort
+  if opts.show_winbar == nil then
+    opts.show_winbar = M._config.show_winbar
+  end
+  if opts.show_hint == nil then
+    opts.show_hint = M._config.show_hint
+  end
   opts.icons = opts.icons or M._config.icons
   opts.confirm = opts.confirm or M._config.confirm
   opts.keys = opts.keys or M._config.keys

@@ -51,6 +51,8 @@ local function open_board(overrides)
     auto_sync = false,
     auto_refresh = overrides.auto_refresh ~= false,
     keys = overrides.keys,
+    show_winbar = overrides.show_winbar,
+    show_hint = overrides.show_hint,
     notify = function(message)
       notifications[#notifications + 1] = message
     end,
@@ -87,6 +89,8 @@ describe("ui.board: tab and window lifecycle", function()
     eq(38, vim.api.nvim_win_get_width(b.list_win))
 
     eq("markdown", vim.bo[b.detail_buf].filetype)
+    eq("Comment", vim.api.nvim_get_hl(0, { name = "LoopKitMuted", link = true }).link)
+    eq("Comment", vim.api.nvim_get_hl(0, { name = "LoopKitDetailMuted", link = true }).link)
     eq(false, vim.bo[b.detail_buf].swapfile)
     eq(false, vim.bo[b.detail_buf].modifiable)
 
@@ -199,7 +203,7 @@ describe("ui.board: help, keymaps and filtering", function()
   it("toggles the help float without changing the selection", function()
     local b, _, state = open_board()
     local selected = state:selected_id()
-    eq("#2", selected)
+    eq("#3", selected)
 
     b:handle("help")
     truthy(help.is_open(), "help float is open")
@@ -216,7 +220,7 @@ describe("ui.board: help, keymaps and filtering", function()
   it("binds every default key locally and honours setup overrides", function()
     local b = open_board()
     local lhs = key_lhs(b.list_buf)
-    for _, key in ipairs({ "j", "k", "<CR>", "/", "s", "S", "r", "R", "c", "d", "D", "b", "e", "a", "x", "o", "F", "P", "T", "M", "n", "?", "q" }) do
+    for _, key in ipairs({ "j", "k", "<CR>", "/", "s", "S", "A", "r", "R", "c", "d", "D", "b", "e", "a", "x", "o", "F", "P", "T", "M", "n", "?", "q" }) do
       truthy(lhs[key], "missing default key " .. key)
     end
     close_board(b)
@@ -227,6 +231,17 @@ describe("ui.board: help, keymaps and filtering", function()
     eq(true, lhs["<F2>"], "custom key is bound")
     eq(true, lhs["j"], "action override keeps the key bound")
     close_board(overridden)
+  end)
+
+  it("can hide the list winbar and hint line", function()
+    local b = open_board({ show_winbar = false, show_hint = false })
+
+    eq("", vim.wo[b.list_win].winbar)
+    match(vim.wo[b.detail_win].winbar, "LoopKit", "detail keeps its winbar")
+    local first = vim.api.nvim_buf_get_lines(b.list_buf, 0, 1, false)[1]
+    match(first, "┌ #3", "hint line is gone, task row is first")
+
+    close_board(b)
   end)
 
   it("applies setup() key and width overrides to later boards", function()
@@ -250,6 +265,20 @@ describe("ui.board: help, keymaps and filtering", function()
     match(bar, "gitea", "provider")
     match(bar, "open 3", "open count")
     match(bar, "filter open")
+    match(bar, "sort id_desc")
+
+    eq("id_desc", state.sort)
+    b:handle("cycle_sort")
+    eq("id_asc", state.sort)
+    b:handle("cycle_sort")
+    eq("closed_desc", state.sort)
+    b:handle("cycle_sort")
+    eq("closed_asc", state.sort)
+    b:handle("cycle_sort")
+    eq("status", state.sort)
+    b:handle("cycle_sort")
+    eq("id_desc", state.sort, "sort cycle wraps")
+    match(b:winbar(), "sort id_desc")
 
     b:set_filter("done")
     eq("done", state.filter)

@@ -30,10 +30,24 @@ local function sample()
 end
 
 describe("state filtering, grouping and sorting", function()
-  it("filters open tasks and groups them by doing/pending/blocked/done", function()
+  it("filters open tasks and defaults to flat descending numeric id order", function()
     local st = state_mod.new():get("/proj/a")
     st:set_filter("open")
     st:set_tasks(sample())
+
+    eq({ "#11", "#10", "#3", "#2", "#1" }, ids(st:visible_tasks()))
+
+    local groups = st:groups()
+    eq(1, #groups)
+    eq(nil, groups[1].status)
+    eq({ "#11", "#10", "#3", "#2", "#1" }, ids(groups[1].tasks))
+  end)
+
+  it("groups by doing/pending/blocked/done when status sort is selected", function()
+    local st = state_mod.new():get("/proj/a")
+    st:set_filter("open")
+    st:set_tasks(sample())
+    st:set_sort("status")
 
     eq({ "#3", "#2", "#10", "#11", "#1" }, ids(st:visible_tasks()))
 
@@ -50,6 +64,8 @@ describe("state filtering, grouping and sorting", function()
     st:set_filter("all")
     st:set_tasks(sample())
 
+    eq({ "#12", "#11", "#10", "#3", "#2", "#1" }, ids(st:visible_tasks()))
+    st:set_sort("status")
     eq({ "#3", "#2", "#10", "#11", "#1", "#12" }, ids(st:visible_tasks()))
     local groups = st:groups()
     eq({ "doing", "pending", "blocked", "done" }, {
@@ -59,6 +75,30 @@ describe("state filtering, grouping and sorting", function()
       groups[4].status,
     })
     eq({ "#12" }, ids(groups[4].tasks))
+  end)
+
+  it("sorts flat lists by numeric id and closed timestamp", function()
+    local st = state_mod.new():get("/proj/sort")
+    st:set_filter("all")
+    st:set_tasks({
+      task("#1", "done", { closedAt = "2026.1.3 10:00:00" }),
+      task("#2", "done", { closedAt = nil }),
+      task("#3", "done", { closedAt = "2026.1.1 10:00:00" }),
+      task("#10", "done", { closedAt = "2026.1.2 10:00:00" }),
+    })
+
+    st:set_sort("id_asc")
+    eq({ "#1", "#2", "#3", "#10" }, ids(st:visible_tasks()))
+    st:set_sort("id_desc")
+    eq({ "#10", "#3", "#2", "#1" }, ids(st:visible_tasks()))
+    st:set_sort("closed_asc")
+    eq({ "#3", "#10", "#1", "#2" }, ids(st:visible_tasks()))
+    st:set_sort("closed_desc")
+    eq({ "#1", "#10", "#3", "#2" }, ids(st:visible_tasks()))
+
+    local groups = st:groups()
+    eq(1, #groups)
+    eq(nil, groups[1].status)
   end)
 
   it("matches keywords against id, title, tag and desc case-insensitively", function()
@@ -80,7 +120,7 @@ describe("state filtering, grouping and sorting", function()
     eq({ "#3" }, ids(st:visible_tasks()))
 
     st:set_query("")
-    eq({ "#1", "#2", "#3" }, ids(st:visible_tasks()))
+    eq({ "#3", "#2", "#1" }, ids(st:visible_tasks()))
   end)
 end)
 
@@ -112,8 +152,8 @@ describe("state selection", function()
     st:select("#3")
 
     st:set_filter("done")
-    eq({ "#2", "#4" }, ids(st:visible_tasks()))
-    eq("#2", st:selected_id())
+    eq({ "#4", "#2" }, ids(st:visible_tasks()))
+    eq("#4", st:selected_id())
   end)
 
   it("clears the selection when nothing is visible", function()

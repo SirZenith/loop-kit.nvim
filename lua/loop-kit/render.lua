@@ -68,18 +68,31 @@ local function sorted_groups(groups)
   return ordered
 end
 
---- Render grouped tasks into display lines.
+--- Render tasks into two-line display rows.
 ---
 --- groups: list from `state:groups()` — `{ { status =, tasks = { ... } }, ... }`
---- opts: { icons =, selected_id = }
+--- opts: { icons =, selected_id =, flat =, presorted =, sort = }
 ---
 --- Returns:
 ---   lines        display strings, 1-based
 ---   line_map     [line] = task id, only for task rows (never headers/blanks)
----   id_to_line   [task id] = line
+---   id_to_line   [task id] = first (top) line
 ---   line_hl      [line] = LoopKit highlight group name
+---   ranges       [n] = { line, col_start, col_end, hl_group } for segment styling
 ---   groups       [n] = { status, header_line, first_line, last_line, tasks = ids }
----   selected_line line of `opts.selected_id`, when visible
+---   selected_line first line of `opts.selected_id`, when visible
+local function status_hl(status)
+  local name = type(status) == "string" and status:lower() or ""
+  if name == "doing" then
+    return "LoopKitDoing"
+  elseif name == "done" then
+    return "LoopKitDone"
+  elseif name == "blocked" then
+    return "LoopKitBlocked"
+  end
+  return "LoopKitPending"
+end
+
 function M.list(groups, opts)
   opts = opts or {}
   local icons = vim.tbl_extend("force", M.icons, opts.icons or {})
@@ -90,58 +103,119 @@ function M.list(groups, opts)
     line_map = {},
     id_to_line = {},
     line_hl = {},
+    ranges = {},
     groups = {},
     selected_line = nil,
   }
 
-  for _, group in ipairs(sorted_groups(groups)) do
+  local function push_range(line, start_col, end_col, hl_group)
+    out.ranges[#out.ranges + 1] = {
+      line = line,
+      col_start = start_col,
+      col_end = end_col,
+      hl_group = hl_group,
+    }
+  end
+
+  local flat = opts.flat
+  if flat == nil then
+    flat = #(groups or {}) == 1 and groups[1].status == nil
+  end
+
+  local ordered_groups = sorted_groups(groups)
+  if flat then
+    local tasks = {}
+    for _, group in ipairs(groups or {}) do
+      for _, task in ipairs(group.tasks or {}) do
+        tasks[#tasks + 1] = task
+      end
+    end
+    ordered_groups = { { status = nil, tasks = tasks } }
+  end
+
+  for _, group in ipairs(ordered_groups) do
     local tasks = {}
     for _, task in ipairs(group.tasks or {}) do
       tasks[#tasks + 1] = task
     end
-    if opts.sort ~= "title" then
+    if not opts.presorted and opts.sort ~= "title" then
       table.sort(tasks, function(a, b)
         return util.compare_ids(a.id, b.id) < 0
       end)
     end
 
     if #tasks > 0 then
-      if #out.lines > 0 then
-        out.lines[#out.lines + 1] = ""
+      local header_line = nil
+      if not flat then
+        if #out.lines > 0 then
+          out.lines[#out.lines + 1] = ""
+        end
+
+        header_line = #out.lines + 1
+        out.lines[header_line] = string.format("%s (%d)", label(group.status), #tasks)
+        out.line_hl[header_line] = "LoopKitHeader"
       end
 
-      local header_line = #out.lines + 1
-      out.lines[header_line] = string.format("%s (%d)", label(group.status), #tasks)
-      out.line_hl[header_line] = "LoopKitHeader"
-
       local record = {
-        status = group.status,
+        status = flat and nil or group.status,
         header_line = header_line,
-        first_line = header_line + 1,
-        last_line = header_line + #tasks,
+        first_line = #out.lines + 1,
+        last_line = nil,
         tasks = {},
       }
       out.groups[#out.groups + 1] = record
 
       for _, task in ipairs(tasks) do
-        local id = util.normalize_id(task.id) or tostring(task.id or "")
-        local text = string.format("%s %s %s", icons[task.status] or "?", id, one_line(task.title))
-        if type(task.tag) == "string" and task.tag ~= "" then
-          text = text .. " [" .. one_line(task.tag) .. "]"
+        if #out.lines > 0 and out.line_map[#out.lines] then
+          out.lines[#out.lines + 1] = ""
         end
+        local id = util.normalize_id(task.id) or tostring(task.id or "")
+        local status = type(task.status) == "string" and task.status:lower() or "pending"
+        local icon = icons[status] or "?"
+        local title = one_line(task.title)
+        if title == "" then
+          title = "(untitled)"
+        end
+        local tag = type(task.tag) == "string" and one_line(task.tag) or ""
+
+        local top_prefix = "┌ "
+        local bottom_prefix = "└ "
+        local first = string.format("%s%s · %s %s", top_prefix, id, icon, status)
+        if tag ~= "" then
+          first = first .. " · " .. tag
+        end
+        local second = bottom_prefix .. title
 
         local line = #out.lines + 1
-        out.lines[line] = text
+        out.lines[line] = first
+        out.lines[line + 1] = second
         out.line_map[line] = id
+        out.line_map[line + 1] = id
         out.id_to_line[id] = line
-        out.line_hl[line] = "LoopKit" .. label(task.status)
         record.tasks[#record.tasks + 1] = id
+
+        push_range(line, 0, #top_prefix, "LoopKitMuted")
+        local col = #top_prefix
+        push_range(line, col, col + #id, "LoopKitId")
+        col = col + #id + #" · "
+        push_range(line, col, col + #icon, status_hl(status))
+        col = col + #icon + #" "
+        push_range(line, col, col + #status, status_hl(status))
+        if tag ~= "" then
+          col = col + #status + #" · "
+          push_range(line, col, col + #tag, "LoopKitTag")
+        end
+
+        push_range(line + 1, 0, #bottom_prefix, "LoopKitMuted")
 
         if selected ~= nil and selected == id then
           out.selected_line = line
           out.line_hl[line] = "LoopKitSelected"
+          out.line_hl[line + 1] = "LoopKitSelected"
         end
       end
+
+      record.last_line = #out.lines
     end
   end
 
@@ -208,30 +282,121 @@ function M.detail(task, opts)
   opts = opts or {}
   task = task or {}
 
-  local out = { lines = {}, fields = {}, title_line = nil }
+  local out = { lines = {}, fields = {}, highlights = {}, title_line = nil }
 
   local function push(text)
     out.lines[#out.lines + 1] = text
     return #out.lines
   end
 
-  local function field(key, value)
-    out.fields[key] = push(string.format("- %s: %s", key, value))
+  local function push_hl(line, start_col, end_col, hl_group)
+    out.highlights[#out.highlights + 1] = {
+      line = line,
+      col_start = start_col,
+      col_end = end_col,
+      hl_group = hl_group,
+    }
+  end
+
+  local function whole(line, hl_group)
+    push_hl(line, 0, #(out.lines[line] or ""), hl_group)
+  end
+
+  local function push_block(text, hl_group)
+    local first_line = nil
+    local start = 1
+    while true do
+      local newline = text:find("\n", start, true)
+      local line_text = newline and text:sub(start, newline - 1) or text:sub(start)
+      local line = push(line_text)
+      if hl_group then
+        whole(line, hl_group)
+      end
+      first_line = first_line or line
+      if not newline then
+        break
+      end
+      start = newline + 1
+    end
+    return first_line
+  end
+
+  local function end_block()
+    if #out.lines > 0 and out.lines[#out.lines] ~= "" then
+      push("")
+    end
+  end
+
+  local function field(key, value, value_hl)
+    local text = value == "" and string.format("- %s:", key) or string.format("- %s: %s", key, value)
+    local line = push(text)
+    out.fields[key] = line
+    push_hl(line, 0, 2, "LoopKitDetailKey")
+    push_hl(line, 2, 2 + #key, "LoopKitDetailKey")
+    if value_hl then
+      push_hl(line, 2 + #key + 2, #(out.lines[line]), value_hl)
+    end
+    return line
+  end
+
+  local function subfield(key, value)
+    local line = push(string.format("  - %s: %s", key, value))
+    out.fields[key] = line
+    push_hl(line, 2, 4, "LoopKitDetailKey")
+    push_hl(line, 4, 4 + #key, "LoopKitDetailKey")
+    return line
+  end
+
+  local function is_unset(value)
+    return value == nil or value == vim.NIL or value == ""
+  end
+
+  local function path_field(key, value)
+    if is_unset(value) then
+      return field(key, "(未设置)", "LoopKitDetailMuted")
+    end
+    return field(key, one_line(tostring(value)), "LoopKitDetailPath")
+  end
+
+  local function section(key, heading)
+    if #out.lines > 0 and out.lines[#out.lines] ~= "" then
+      push("")
+    end
+    local line = push(heading)
+    out.fields[key] = line
+    whole(line, "LoopKitDetailSection")
+    push("")
+    return line
+  end
+
+  local function muted_block(key, text)
+    local line = push(text)
+    out.fields[key] = line
+    whole(line, "LoopKitDetailMuted")
+    return line
   end
 
   local title = one_line(task.title)
   out.title_line = push("# " .. (title ~= "" and title or "(untitled)"))
+  whole(out.title_line, "LoopKitDetailTitle")
   push("")
 
-  field("id", util.normalize_id(task.id) or format_value(task.id))
-  field("status", format_value(task.status))
-  field("tag", format_value(task.tag))
+  field("id", util.normalize_id(task.id) or format_value(task.id), "LoopKitDetailId")
+  local status = type(task.status) == "string" and task.status:lower() or ""
+  field("status", format_value(task.status), status ~= "" and status_hl(status) or "LoopKitDetailMuted")
+  field("tag", format_value(task.tag), "LoopKitDetailTag")
   field("origin", format_value(task.origin))
   field("openAt", format_value(task.openAt))
   field("closedAt", format_value(task.closedAt))
   field("hash", format_value(task.hash))
   field("deps", deps_text(task, opts))
-  field("doc", format_value(task.doc))
+  path_field("doc", task.doc)
+  path_field("docParent", task.docParent)
+  path_field("specPrompt", task.specPrompt)
+  path_field("researchPrompt", task.researchPrompt)
+  path_field("codePrompt", task.codePrompt)
+  path_field("verifyPrompt", task.verifyPrompt)
+  path_field("docTaskSplitPrompt", task.docTaskSplitPrompt)
 
   local flow = flow_text(task)
   field("flow", flow or "(default)")
@@ -251,32 +416,100 @@ function M.detail(task, opts)
     if touch == "" then
       field("touch", "(empty)")
     else
-      field("touch", one_line(touch))
+      field("touch", one_line(touch), "LoopKitDetailPath")
     end
   elseif type(touch) ~= "table" or #touch == 0 then
     field("touch", "(empty)")
   else
     out.fields.touch = push("- touch:")
+    push_hl(out.fields.touch, 0, #"- touch:", "LoopKitDetailKey")
     for _, path in ipairs(touch) do
-      push("  - " .. one_line(tostring(path)))
+      local line = push("  - " .. one_line(tostring(path)))
+      push_hl(line, 0, 4, "LoopKitDetailKey")
+      push_hl(line, 4, #(out.lines[line]), "LoopKitDetailPath")
     end
   end
 
   field("meta", meta_text(task))
 
+  local analysis = opts.analysis
+  if type(analysis) == "table" then
+    push("")
+    push("---")
+    push("")
+    field("decide", tostring(analysis.summary or ""))
+    field("analysis", "")
+    subfield("outstanding", tonumber(analysis.outstanding) or 0)
+    subfield("eligible", tostring(analysis.eligible == true))
+    subfield("blocked", tostring(analysis.blocked == true))
+    subfield("stuck", tostring(analysis.stuck == true))
+  end
+
+  section("desc", "# 任务描述")
   local desc = task.desc
   if type(desc) == "string" and desc ~= "" then
-    push("")
-    out.fields.desc = #out.lines + 1
-    local start = 1
-    while true do
-      local first, last = desc:find("\n", start, true)
-      if not first then
-        out.lines[#out.lines + 1] = desc:sub(start)
-        break
+    out.fields.desc_content = push_block(desc)
+  else
+    muted_block("desc_content", "暂无内容")
+  end
+  end_block()
+
+  section("userPrompt", "# 用户提示词")
+  local user_prompt = task.userPrompt
+  if type(user_prompt) == "string" and user_prompt ~= "" then
+    out.fields.userPrompt_content = push_block(user_prompt)
+  else
+    muted_block("userPrompt_content", "暂无内容")
+  end
+  end_block()
+
+  section("stagePrompt", "# 各阶段提示词")
+  local stage_prompt = task.stagePrompt
+  if type(stage_prompt) ~= "table" or stage_prompt == vim.NIL or next(stage_prompt) == nil then
+    muted_block("stagePrompt_content", "暂无内容")
+    end_block()
+  else
+    local stage_order = {
+      "research",
+      "spec",
+      "json-task-split",
+      "doc-task-split",
+      "decision-question",
+      "impl",
+      "verify",
+      "commit",
+    }
+    local rank = {}
+    for index, name in ipairs(stage_order) do
+      rank[name] = index
+    end
+    local keys = {}
+    for key in pairs(stage_prompt) do
+      keys[#keys + 1] = key
+    end
+    table.sort(keys, function(a, b)
+      local ra, rb = rank[a], rank[b]
+      if ra and rb then
+        return ra < rb
+      elseif ra then
+        return true
+      elseif rb then
+        return false
       end
-      out.lines[#out.lines + 1] = desc:sub(start, first - 1)
-      start = last + 1
+      return tostring(a) < tostring(b)
+    end)
+    for _, key in ipairs(keys) do
+      local line = push("## " .. one_line(tostring(key)))
+      out.fields["stagePrompt." .. tostring(key)] = line
+      whole(line, "LoopKitDetailSection")
+      push("")
+      local value = stage_prompt[key]
+      if type(value) == "string" and value ~= "" then
+        out.fields["stagePrompt." .. tostring(key) .. ".content"] = push_block(value)
+      else
+        muted_block("stagePrompt." .. tostring(key) .. ".content", "暂无内容")
+      end
+      end_block()
     end
   end
 

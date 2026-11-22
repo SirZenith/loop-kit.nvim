@@ -42,6 +42,8 @@ end
 describe("ui.list: fixed fixture", function()
   it("renders status groups, icons and the selected row", function()
     local list, state, buf = make_list()
+    state:set_sort("status")
+    state:select("#2")
     local rendered = list:draw()
     local lines = buffer_lines(buf)
 
@@ -49,8 +51,9 @@ describe("ui.list: fixed fixture", function()
     truthy(contains(lines, "Pending (2)"), "pending group header")
     truthy(contains(lines, "Blocked (1)"), "blocked group header")
     truthy(contains(lines, "Done (1)"), "done group header")
-    truthy(contains(lines, "◐ #2 Beta doing"), "doing icon + title")
-    truthy(contains(lines, "○ #1 Alpha pending [feat]"), "pending icon + tag")
+    truthy(contains(lines, "┌ #2 · ◐ doing · fix"), "doing first row")
+    truthy(contains(lines, "└ Beta doing"), "doing second row")
+    truthy(contains(lines, "┌ #1 · ○ pending · feat"), "pending first row")
 
     eq("#2", state:selected_id())
     eq("#2", rendered.line_map[rendered.selected_line])
@@ -58,25 +61,72 @@ describe("ui.list: fixed fixture", function()
     eq(nil, rendered.line_map[1], "group headers are not task rows")
   end)
 
+  it("uses a flat two-line list by default", function()
+    local list, _, buf = make_list()
+    list:draw()
+    local lines = buffer_lines(buf)
+
+    falsy(contains(lines, "Doing (1)"), "flat list has no status header")
+    truthy(contains(lines, "┌ #7 · ○ pending · docs"), "first task first row")
+    truthy(contains(lines, "└ Epsilon pending"), "first task second row")
+    local first = nil
+    for index, line in ipairs(lines) do
+      if line:find("┌ #7", 1, true) then
+        first = index
+      end
+    end
+    truthy(first, "first task is present")
+    eq("", lines[first + 2], "one blank line between adjacent tasks")
+    match(lines[first + 3], "^┌ #4", "next task follows the blank line")
+  end)
+
+  it("returns per-segment highlight ranges for two-line rows", function()
+    local list, _, _ = make_list()
+    local rendered = list:draw()
+
+    local groups = {}
+    for _, range in ipairs(rendered.ranges) do
+      groups[range.hl_group] = true
+    end
+    truthy(groups.LoopKitMuted, "prefix range")
+    truthy(groups.LoopKitId, "id range")
+    truthy(groups.LoopKitPending, "pending status range")
+    truthy(groups.LoopKitDoing, "doing status range")
+    truthy(groups.LoopKitTag, "tag range")
+
+    local id_line = rendered.id_to_line["#2"]
+    eq("#2", rendered.line_map[id_line + 1], "second line maps to the same task")
+    local title_ranges = {}
+    for _, range in ipairs(rendered.ranges) do
+      if range.line == id_line + 1 then
+        title_ranges[#title_ranges + 1] = range
+      end
+    end
+    eq(1, #title_ranges, "title text stays in the normal text colour")
+    eq("LoopKitMuted", title_ranges[1].hl_group)
+    eq(0, title_ranges[1].col_start)
+    eq(#"└ ", title_ranges[1].col_end)
+  end)
+
   it("navigates visible rows and clamps at both ends", function()
     local list, state = make_list()
     list:draw()
 
-    eq({ "#2", "#1", "#7", "#3", "#4" }, visible_ids(state))
+    eq({ "#7", "#4", "#3", "#2", "#1" }, visible_ids(state))
 
-    eq("#1", list:move(1))
-    eq("#7", list:move(1))
-    eq("#4", list:move(10), "clamps at the last row")
-    eq("#3", list:move(-1))
-    eq("#2", list:move(-10), "clamps at the first row")
-    eq("#2", state:selected_id())
+    eq("#4", list:move(1))
+    eq("#3", list:move(1))
+    eq("#1", list:move(10), "clamps at the last row")
+    eq("#2", list:move(-1))
+    eq("#7", list:move(-10), "clamps at the first row")
+    eq("#7", state:selected_id())
   end)
 
   it("narrows by filter, keyword and tag without changing the fixture", function()
     local list, state = make_list()
 
     state:set_filter("pending")
-    eq({ "#1", "#7" }, visible_ids(state))
+    eq({ "#7", "#1" }, visible_ids(state))
 
     state:set_query("ALPHA")
     eq({ "#1" }, visible_ids(state), "case-insensitive title match")
@@ -125,6 +175,7 @@ describe("ui.list: fixed fixture", function()
     list:notice("empty", "（无任务）")
     list:draw()
     eq(nil, list.notice_kind)
-    truthy(contains(buffer_lines(buf), "#2 Beta doing"))
+    truthy(contains(buffer_lines(buf), "#2"), "task id is back")
+    truthy(contains(buffer_lines(buf), "Beta doing"), "task title is back")
   end)
 end)

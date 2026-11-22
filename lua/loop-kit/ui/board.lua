@@ -10,11 +10,15 @@ local list_ui = require("loop-kit.ui.list")
 local detail_ui = require("loop-kit.ui.detail")
 local help_ui = require("loop-kit.ui.help")
 
+-- Define the default links as soon as the board is loaded: users are not
+-- required to call setup(), and extmarks resolve hl_group names eagerly.
+require("loop-kit.highlights").setup()
+
 local M = {}
 
 local OPEN_STATUS = { pending = true, doing = true, blocked = true }
 local FILTER_ORDER = { "open", "all", "pending", "doing", "blocked", "done" }
-local HINT = "j/k 移动 · <CR> 详情 · / 筛选 · s/S 筛选 · r/R 刷新 · o doc · ? 帮助 · q 关闭"
+local HINT = "j/k 移动 · <CR> 详情 · / 筛选 · s/A 筛选 · S 排序 · r/R 刷新 · o doc · ? 帮助 · q 关闭"
 
 local DEFAULT_KEYS = {
   j = "move_down",
@@ -25,7 +29,8 @@ local DEFAULT_KEYS = {
   ["/"] = "filter_prompt",
   ["<Esc>"] = "clear_query",
   s = "cycle_filter",
-  S = "filter_all",
+  A = "filter_all",
+  S = "cycle_sort",
   r = "refresh",
   R = "sync",
   c = "claim",
@@ -49,8 +54,10 @@ M.DEFAULT_KEYS = DEFAULT_KEYS
 M.config = {
   list_width = 38,
   default_filter = "open",
-  sort = "status",
+  sort = "id_desc",
   auto_sync = true,
+  show_winbar = true,
+  show_hint = true,
   keys = {},
 }
 
@@ -206,6 +213,19 @@ function Board:_create_ui()
     end,
   })
   self.list:set_hint(HINT)
+  local show_hint = self.opts.show_hint
+  if show_hint == nil then
+    show_hint = M.config.show_hint
+  end
+  self.show_hint = show_hint ~= false
+  if not self.show_hint then
+    self.list:set_hint(nil)
+  end
+  local show_winbar = self.opts.show_winbar
+  if show_winbar == nil then
+    show_winbar = M.config.show_winbar
+  end
+  self.show_winbar = show_winbar ~= false
   self.detail = detail_ui.new({
     root = self.root,
     buf = detail_buf,
@@ -373,6 +393,7 @@ function Board:winbar()
     provider,
     "open " .. open_count,
     "filter " .. ((self.state and self.state.filter) or "open"),
+    "sort " .. ((self.state and self.state.sort) or "id_desc"),
   }
   if self.state and self.state.query and self.state.query ~= "" then
     parts[#parts + 1] = "query " .. self.state.query
@@ -400,12 +421,15 @@ end
 
 function Board:_update_winbar()
   local text = self:winbar():gsub("%%", "%%%%")
-  for _, win in ipairs({ self.list_win, self.detail_win }) do
-    if valid_win(win) then
-      pcall(function()
-        vim.wo[win].winbar = text
-      end)
-    end
+  if valid_win(self.list_win) and self.show_winbar ~= false then
+    pcall(function()
+      vim.wo[self.list_win].winbar = text
+    end)
+  end
+  if valid_win(self.detail_win) then
+    pcall(function()
+      vim.wo[self.detail_win].winbar = text
+    end)
   end
 end
 
@@ -543,6 +567,14 @@ function Board:set_filter(filter)
     return
   end
   self.state:set_filter(filter)
+  self:draw()
+end
+
+function Board:set_sort(sort)
+  if self.closed or not self.state then
+    return
+  end
+  self.state:set_sort(sort)
   self:draw()
 end
 
@@ -737,6 +769,18 @@ local ACTIONS = {
   end,
   filter_all = function(self)
     self:set_filter("all")
+  end,
+  cycle_sort = function(self)
+    local order = require("loop-kit.state").SORT_MODES
+    local current = self.state.sort or "id_desc"
+    local index = 0
+    for i, value in ipairs(order) do
+      if value == current then
+        index = i
+        break
+      end
+    end
+    self:set_sort(order[(index % #order) + 1])
   end,
   refresh = function(self)
     self:refresh({ no_sync = true })
