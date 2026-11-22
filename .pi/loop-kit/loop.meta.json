@@ -244,8 +244,18 @@
       "baseSha": "6010f5491b8b07fcad2f37cb5ba87d4133f7fbe0"
     },
     "#18": {
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-22T22-58-23-item-18.md",
       "branch": "pi-wt/loop-18-3aeab405",
-      "baseSha": "6010f5491b8b07fcad2f37cb5ba87d4133f7fbe0"
+      "baseSha": "6010f5491b8b07fcad2f37cb5ba87d4133f7fbe0",
+      "touch": [
+        "lua/loop-kit/ui/confirm.lua",
+        "lua/loop-kit/actions.lua",
+        "lua/loop-kit/advanced.lua",
+        "lua/loop-kit/ui/board.lua",
+        "lua/loop-kit/edit.lua",
+        "tests/unit/ui_confirm_spec.lua",
+        "tests/render/ui_confirm_spec.lua"
+      ]
     },
     "#19": {
       "hash": "73c58c6ca259f0a5f02681224691adb9c3cff5f9",
