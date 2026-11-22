@@ -207,6 +207,17 @@
         "README.md",
         "doc/loop-kit.txt"
       ]
+    },
+    "#14": {
+      "hash": "61592a6",
+      "touch": [
+        "lua/loop-kit/render.lua",
+        "tests/unit/render_spec.lua",
+        "tests/render/detail_spec.lua",
+        "tests/unit/edit_spec.lua",
+        "README.md",
+        "doc/loop-kit.txt"
+      ]
     }
   }
 }
