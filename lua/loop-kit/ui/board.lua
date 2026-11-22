@@ -714,7 +714,7 @@ end
 
 --- Ask a multiple-choice question. Injected `edit_ask` keeps tests simple;
 --- `form_ask` (boolean confirm) is accepted as a legacy alias.
-function Board:_edit_ask(prompt, options, cb)
+function Board:_edit_ask(prompt, options, cb, ask_opts)
   if self.opts.edit_ask then
     return self.opts.edit_ask(prompt, options, cb)
   end
@@ -727,9 +727,7 @@ function Board:_edit_ask(prompt, options, cb)
       end
     end)
   end
-  vim.ui.select(options, { prompt = prompt, format_item = tostring }, function(choice)
-    cb(choice)
-  end)
+  require("loop-kit.ui.confirm").choice(prompt, options, cb, ask_opts)
 end
 
 --- Prompt for one line. Injected `input` keeps the `_prompt_query` signature.
@@ -839,8 +837,8 @@ function Board:_begin_edit(target, task, content, is_new)
     content = content or "",
     detail_buf = self.detail_buf,
     detail_win = self.detail_win,
-    ask = function(prompt, options, cb)
-      self:_edit_ask(prompt, options, cb)
+    ask = function(prompt, options, cb, ask_opts)
+      self:_edit_ask(prompt, options, cb, ask_opts)
     end,
     notify = function(message)
       self:_notify(message)
@@ -1010,7 +1008,7 @@ function Board:_edit_stage_rename(task, stage)
             self:_focus_section({ field = "stagePrompt" })
           end
         end)
-      end)
+      end, { default = 2 })
       return
     end
     if stage_prompts(task)[value] ~= nil then
