@@ -430,8 +430,8 @@ describe("render.detail", function()
 
     local empty = render.detail(task("#8", "pending"))
     local text = table.concat(empty.lines, "\n")
-    match(text, "%(none%)", "empty deps must be explicit")
-    match(text, "%(未设置%)", "missing doc must be explicit")
+    match(text, "N/A", "empty deps must be explicit")
+    match(text, "N/A", "missing doc must be explicit")
   end)
 
   it("marks dependency status with icons and status colours", function()
@@ -464,16 +464,16 @@ describe("render.detail", function()
     eq({ "○=LoopKitPending", "◐=LoopKitDoing", "●=LoopKitDone", "✕=LoopKitBlocked" }, marks)
   end)
 
-  it("distinguishes unknown touch from an empty touch array", function()
+  it("renders missing or empty touch as N/A", function()
     local null_touch = render.detail(task("#1", "pending", { touch = vim.NIL }))
-    match(table.concat(null_touch.lines, "\n"), "touch%s+unknown")
+    match(table.concat(null_touch.lines, "\n"), "touch%s+N/A")
 
     local missing_touch = render.detail(task("#2", "pending"))
-    match(table.concat(missing_touch.lines, "\n"), "touch%s+unknown")
+    match(table.concat(missing_touch.lines, "\n"), "touch%s+N/A")
 
     local empty_touch = render.detail(task("#3", "pending", { touch = {} }))
     local empty_text = table.concat(empty_touch.lines, "\n")
-    match(empty_text, "touch%s+%(empty%)")
+    match(empty_text, "touch%s+N/A")
     falsy(empty_text:find("unknown", 1, true), "empty array must not read as unknown")
 
     local paths = render.detail(task("#4", "pending", { touch = { "lua/**", "tests/*.lua" } }))
@@ -503,8 +503,8 @@ describe("render.detail", function()
     local out = render.detail(task("#5", "doing"))
     local text = table.concat(out.lines, "\n")
     truthy(text:find("flow", 1, true))
-    truthy(text:find("(default)", 1, true))
-    truthy(text:find("(unset)", 1, true))
+    truthy(text:find("N/A", 1, true), "flow defaults to N/A")
+    truthy(text:find("N/A", 1, true), "isPrivateDesc defaults to N/A")
     truthy(out.fields.isPrivateDesc > out.fields.meta, "isPrivateDesc must follow meta")
 
     local with_fields = render.detail(task("#6", "doing", {
@@ -596,7 +596,7 @@ describe("render.detail", function()
     eq("# 任务描述", lines[previous_stop + 2])
   end)
 
-  it("clamps the card width to 64 columns and follows narrow panes", function()
+  it("clamps the card width to 80 columns and follows narrow panes", function()
     local function border_width(pane)
       local out = render.detail(task("#7", "doing"), { width = pane })
       local line = out.lines[3]
@@ -604,11 +604,11 @@ describe("render.detail", function()
       return util.display_width(line)
     end
 
-    eq(64, border_width(120))
+    eq(80, border_width(120))
     eq(50, border_width(50))
     eq(30, border_width(30))
     eq(20, border_width(10))
-    eq(64, util.display_width(render.detail(task("#7", "doing")).lines[3]))
+    eq(80, util.display_width(render.detail(task("#7", "doing")).lines[3]))
   end)
 
   it("left-aligns keys and right-aligns single-line values", function()
@@ -682,7 +682,7 @@ describe("render.detail", function()
       end
     end
     eq("LoopKitDetailMuted", doc_hl)
-    truthy(unset.lines[unset.fields.doc]:find("(未设置)", 1, true))
+    truthy(unset.lines[unset.fields.doc]:find("N/A", 1, true))
 
     local touch = render.detail(task("#4", "pending", {
       touch = { "lua/a.lua", "tests/b_spec.lua" },

@@ -33,9 +33,11 @@ local function one_line(value)
   return (value:gsub("[\r\n]", " "))
 end
 
+local DETAIL_NA = "N/A"
+
 local function format_value(value)
   if value == nil or value == vim.NIL then
-    return "(none)"
+    return DETAIL_NA
   end
   if type(value) == "string" then
     return one_line(value)
@@ -403,7 +405,7 @@ function M.list(groups, opts)
   return out
 end
 
-local DETAIL_CARD_MAX_WIDTH = 64
+local DETAIL_CARD_MAX_WIDTH = 80
 local DETAIL_CARD_MIN_WIDTH = 20
 local DETAIL_CARD_GAP = 2
 
@@ -508,7 +510,7 @@ end
 local function deps_segments(task, opts)
   local deps = task.deps
   if deps == nil or deps == vim.NIL or type(deps) ~= "table" or #deps == 0 then
-    return { { text = "(none)" } }
+    return { { text = DETAIL_NA, hl_group = "LoopKitDetailMuted" } }
   end
 
   local icons = vim.tbl_extend("force", M.icons, opts.icons or {})
@@ -552,16 +554,24 @@ local function flow_text(task)
   return one_line(tostring(flow))
 end
 
-local function meta_text(task)
+local function meta_segments(task)
   local meta = task.meta
   if meta == nil or meta == vim.NIL or type(meta) ~= "table" or (meta.branch == nil and meta.baseSha == nil) then
-    return "(unset)"
+    return nil
   end
-  return string.format(
-    "branch=%s baseSha=%s",
-    format_value(meta.branch),
-    format_value(meta.baseSha)
-  )
+  local segments = {}
+  local function add(label, value)
+    segments[#segments + 1] = { text = label }
+    if value == nil or value == vim.NIL or value == "" then
+      segments[#segments + 1] = { text = DETAIL_NA, hl_group = "LoopKitDetailMuted" }
+    else
+      segments[#segments + 1] = { text = format_value(value) }
+    end
+  end
+  add("branch=", meta.branch)
+  segments[#segments + 1] = { text = " " }
+  add("baseSha=", meta.baseSha)
+  return segments
 end
 
 --- Render a task detail as Markdown lines.
@@ -628,6 +638,17 @@ function M.detail(task, opts)
     return { { text = text or "", hl_group = hl_group } }
   end
 
+  local function unset_seg()
+    return seg(DETAIL_NA, "LoopKitDetailMuted")
+  end
+
+  local function value_seg(value, hl_group)
+    if is_unset(value) then
+      return unset_seg()
+    end
+    return seg(format_value(value), hl_group)
+  end
+
   local cards = {}
   local current_card = nil
 
@@ -645,7 +666,7 @@ function M.detail(task, opts)
 
   local function path_field(key, value)
     if is_unset(value) then
-      return field(key, seg("(未设置)", "LoopKitDetailMuted"))
+      return field(key, unset_seg())
     end
     return field(key, seg(one_line(tostring(value)), "LoopKitDetailPath"))
   end
@@ -677,14 +698,17 @@ function M.detail(task, opts)
   push("")
 
   card("状态信息")
-  field("id", seg(util.normalize_id(task.id) or format_value(task.id), "LoopKitDetailId"))
+  field("id", value_seg(util.normalize_id(task.id) or task.id, "LoopKitDetailId"))
   local status = type(task.status) == "string" and task.status:lower() or ""
-  field("status", seg(format_value(task.status), status ~= "" and status_hl(status) or "LoopKitDetailMuted"))
-  field("tag", seg(format_value(task.tag), "LoopKitDetailTag"))
-  field("origin", seg(format_value(task.origin)))
-  field("openAt", seg(format_value(task.openAt)))
-  field("closedAt", seg(format_value(task.closedAt)))
-  field("hash", seg(format_value(task.hash)))
+  field(
+    "status",
+    value_seg(task.status, status ~= "" and status_hl(status) or "LoopKitDetailMuted")
+  )
+  field("tag", value_seg(task.tag, "LoopKitDetailTag"))
+  field("origin", value_seg(task.origin))
+  field("openAt", value_seg(task.openAt))
+  field("closedAt", value_seg(task.closedAt))
+  field("hash", value_seg(task.hash))
 
   card("依赖与文档")
   field("deps", deps_segments(task, opts))
@@ -700,20 +724,20 @@ function M.detail(task, opts)
 
   card("执行信息")
   local flow = flow_text(task)
-  field("flow", seg(flow or "(default)"))
+  field("flow", flow and seg(flow) or unset_seg())
 
   local touch = task.touch
   local touch_blocks
   if touch == nil or touch == vim.NIL then
-    touch_blocks = { seg("unknown") }
+    touch_blocks = { unset_seg() }
   elseif type(touch) == "string" then
     if touch == "" then
-      touch_blocks = { seg("(empty)") }
+      touch_blocks = { unset_seg() }
     else
       touch_blocks = { seg(one_line(touch), "LoopKitDetailPath") }
     end
   elseif type(touch) ~= "table" or #touch == 0 then
-    touch_blocks = { seg("(empty)") }
+    touch_blocks = { unset_seg() }
   else
     touch_blocks = {}
     for _, path in ipairs(touch) do
@@ -722,14 +746,14 @@ function M.detail(task, opts)
   end
   field("touch", nil, touch_blocks)
 
-  field("meta", seg(meta_text(task)))
+  field("meta", meta_segments(task) or unset_seg())
 
   local private_desc = task.isPrivateDesc
   if private_desc == nil or private_desc == vim.NIL then
     private_desc = task.private
   end
   if private_desc == nil or private_desc == vim.NIL then
-    field("isPrivateDesc", seg("(unset)", "LoopKitDetailMuted"))
+    field("isPrivateDesc", unset_seg())
   else
     field("isPrivateDesc", seg(private_desc == true and "true" or "false", "LoopKitDetailConstant"))
   end
@@ -745,8 +769,10 @@ function M.detail(task, opts)
     field("stuck", seg(tostring(analysis.stuck == true), "LoopKitDetailConstant"))
   end
 
-  local width = tonumber(opts.width) or DETAIL_CARD_MAX_WIDTH
-  width = math.min(DETAIL_CARD_MAX_WIDTH, math.max(DETAIL_CARD_MIN_WIDTH, math.floor(width)))
+  local max_width = tonumber(opts.max_width) or DETAIL_CARD_MAX_WIDTH
+  max_width = math.max(DETAIL_CARD_MIN_WIDTH, math.floor(max_width))
+  local width = tonumber(opts.width) or max_width
+  width = math.min(max_width, math.max(DETAIL_CARD_MIN_WIDTH, math.floor(width)))
 
   local function render_card(spec)
     local inner = width - 4
@@ -782,6 +808,9 @@ function M.detail(task, opts)
           local pad = right_align and string.rep(" ", padding) or ""
           local value_part = right_align and value_text or util.pad_display(value_text, value_col)
           local line = push("│ " .. left .. "  " .. pad .. value_part .. " │")
+          push_hl(line, 0, #"│ ", "LoopKitMuted")
+          local line_len = #(out.lines[line])
+          push_hl(line, line_len - #" │", line_len, "LoopKitMuted")
           if right_align then
             first_line = line
             out.fields[item.key] = line

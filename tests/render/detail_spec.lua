@@ -34,6 +34,7 @@ local function make_detail(overrides)
     buf = buf,
     win = overrides.win,
     width = overrides.width,
+    max_width = overrides.max_width,
     opener = overrides.opener,
     notify = function(message)
       notifications[#notifications + 1] = message
@@ -57,6 +58,22 @@ local function card_start(lines, title)
       return index
     end
   end
+end
+
+local function muted_at(marks, row, col, hl_group)
+  hl_group = hl_group or "LoopKitMuted"
+  for _, mark in ipairs(marks) do
+    local start_col, details = mark[3], mark[4]
+    if
+      mark[2] == row
+      and details.hl_group == hl_group
+      and start_col <= col
+      and (details.end_col or start_col + 1) > col
+    then
+      return true
+    end
+  end
+  return false
 end
 
 describe("ui.detail: readonly markdown view", function()
@@ -218,6 +235,95 @@ describe("ui.detail: readonly markdown view", function()
     truthy(muted_top >= 4, "every card top border is muted")
     eq(4, muted_bottom, "every card bottom border is muted")
     eq(4, titles, "every card title uses the section group")
+  end)
+
+  it("mutes every card border stroke", function()
+    local detail, buf = make_detail({ width = 50 })
+    detail:render(TASK)
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local ns = vim.api.nvim_get_namespaces()["loop-kit-ui-detail"]
+    local marks = vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, { details = true })
+
+    local field_rows = 0
+    for index, line in ipairs(lines) do
+      local first = vim.fn.strcharpart(line, 0, 1)
+      if first == "│" then
+        truthy(muted_at(marks, index - 1, 0), "left card edge is muted on line " .. index)
+        truthy(
+          muted_at(marks, index - 1, #line - #" │"),
+          "right card edge is muted on line " .. index
+        )
+        field_rows = field_rows + 1
+      elseif first == "╭" or first == "╰" then
+        local col = 0
+        for char_index = 0, vim.fn.strchars(line) - 1 do
+          local char = vim.fn.strcharpart(line, char_index, 1)
+          if char == "─" or char == "╭" or char == "╮" or char == "╰" or char == "╯" then
+            truthy(muted_at(marks, index - 1, col), "card stroke is muted on line " .. index)
+          end
+          col = col + #char
+        end
+      end
+    end
+
+    truthy(field_rows >= 4, "field rows carry muted side borders")
+  end)
+
+  it("defaults the card width to 80 and accepts an override", function()
+    local detail, buf = make_detail()
+    detail:render(TASK)
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    eq(80, util.display_width(lines[3]))
+
+    local wide_detail, wide_buf = make_detail({ max_width = 100 })
+    wide_detail:render(TASK)
+    local wide = vim.api.nvim_buf_get_lines(wide_buf, 0, -1, false)
+    eq(100, util.display_width(wide[3]))
+
+    local narrow_detail, narrow_buf = make_detail({ max_width = 30, width = 200 })
+    narrow_detail:render(TASK)
+    local narrow = vim.api.nvim_buf_get_lines(narrow_buf, 0, -1, false)
+    eq(30, util.display_width(narrow[3]))
+  end)
+
+  it("renders unset values as a muted N/A", function()
+    local sparse = {
+      id = "#9",
+      title = "Sparse task",
+      status = "pending",
+    }
+    local detail, buf = make_detail({ width = 50 })
+    local rendered = detail:render(sparse)
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local ns = vim.api.nvim_get_namespaces()["loop-kit-ui-detail"]
+    local marks = vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, { details = true })
+
+    for _, key in ipairs({
+      "tag",
+      "origin",
+      "openAt",
+      "closedAt",
+      "hash",
+      "deps",
+      "doc",
+      "docParent",
+      "specPrompt",
+      "researchPrompt",
+      "codePrompt",
+      "verifyPrompt",
+      "docTaskSplitPrompt",
+      "flow",
+      "touch",
+      "meta",
+      "isPrivateDesc",
+    }) do
+      local row = rendered.fields[key]
+      truthy(row, "expected a row for " .. key)
+      local line = lines[row]
+      local col = line:find("N/A", 1, true)
+      truthy(col, "unset " .. key .. " renders N/A")
+      truthy(muted_at(marks, row - 1, col - 1, "LoopKitDetailMuted"), "N/A for " .. key .. " is muted")
+    end
   end)
 
   it("re-renders with the current pane width", function()

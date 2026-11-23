@@ -131,8 +131,9 @@ doing → pending → blocked → done 分组。详情窗里也可使用 `q`、`
 `docParent`）、提示词（`specPrompt`、`researchPrompt`、`codePrompt`、`verifyPrompt`、
 `docTaskSplitPrompt`）、执行信息（`flow`、`touch`、`meta`、`isPrivateDesc`）与决策
 说明（`decide`、`analysis`、`outstanding`、`eligible`、`blocked`、`stuck`，仅在 decide
-分析可用时出现）。卡片用 `╭─`/`╰` 圆角边框，最多 64 列（窗口更窄时收窄，最小
-20 列）；键名靠左、值靠右，超宽值按聊天气泡方式折行。卡片之间只留一个空行，不再
+分析可用时出现）。卡片用 `╭─`/`╰` 圆角边框，最多 80 列（窗口更窄时收窄，最小
+20 列，可用 `detail_width` 调整）；键名靠左、值靠右，超宽值按聊天气泡方式折行。
+值为空时统一显示为注释色的 `N/A`。卡片之间只留一个空行，不再
 输出 Markdown 分隔线 `---`。
 
 同一项目的写操作串行执行（FIFO）；切换筛选和只读刷新不会被写请求阻塞，但写完成前
@@ -146,6 +147,7 @@ require("loop-kit").setup({
   project_root = nil,      -- 覆盖项目根
   auto_sync = true,        -- 打开/刷新时是否后台完整同步（仅远端源访问网络）
   list_width = 38,         -- 左窗宽度
+  detail_width = 80,       -- 详情卡片最大宽度（窗口更窄时收窄）
   default_filter = "open", -- open/all/pending/doing/blocked/done
   sort = "id_desc",        -- id_desc/id_asc/closed_desc/closed_asc/status/title
   show_winbar = true,      -- 左窗是否显示 winbar（右窗始终显示）

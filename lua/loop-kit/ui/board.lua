@@ -62,6 +62,7 @@ local DEFAULT_KEYS = {
 M.DEFAULT_KEYS = DEFAULT_KEYS
 M.config = {
   list_width = 38,
+  detail_width = 80,
   default_filter = "open",
   sort = "id_desc",
   auto_sync = true,
@@ -242,6 +243,7 @@ function Board:_create_ui()
     root = self.root,
     buf = detail_buf,
     win = detail_win,
+    max_width = tonumber(self.opts.detail_width or M.config.detail_width) or 80,
     opener = self.opts.open_doc,
     notify = function(message)
       self:_notify(message)

@@ -28,6 +28,7 @@ local function defaults()
     project_root = nil,
     auto_sync = true,
     list_width = 38,
+    detail_width = 80,
     default_filter = "open",
     sort = "id_desc",
     show_winbar = true,
@@ -66,6 +67,7 @@ function M.setup(opts)
   end
   board.setup({
     list_width = M._config.list_width,
+    detail_width = M._config.detail_width,
     default_filter = M._config.default_filter,
     sort = M._config.sort,
     show_winbar = M._config.show_winbar,
@@ -86,6 +88,7 @@ function M.reset()
   M._config = defaults()
   board.setup({
     list_width = M._config.list_width,
+    detail_width = M._config.detail_width,
     default_filter = M._config.default_filter,
     sort = M._config.sort,
     show_winbar = M._config.show_winbar,
@@ -223,6 +226,7 @@ function M.open(opts)
   opts.project_root = nil
   opts.path = nil
   opts.list_width = opts.list_width or M._config.list_width
+  opts.detail_width = opts.detail_width or M._config.detail_width
   opts.default_filter = opts.default_filter or M._config.default_filter
   opts.sort = opts.sort or M._config.sort
   if opts.show_winbar == nil then

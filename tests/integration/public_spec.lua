@@ -126,6 +126,15 @@ describe("plugin registration and defaults", function()
     eq(true, cfg.confirm.remove)
     eq({}, cfg.keys)
   end)
+
+  it("exposes a configurable detail card width", function()
+    eq(80, loopkit.defaults().detail_width)
+
+    local cfg = loopkit.setup({ detail_width = 100 })
+    eq(100, cfg.detail_width)
+
+    loopkit.reset()
+  end)
 end)
 
 describe("public API against the fake CLI", function()
