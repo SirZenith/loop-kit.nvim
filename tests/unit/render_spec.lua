@@ -146,7 +146,8 @@ describe("render.list card style", function()
 
     eq(12, #out.lines)
     local first = out.lines[out.id_to_line["#2"]]
-    eq("╭─ #2" .. string.rep("─", 24) .. " ◐ doing ─╮", first)
+    eq("╭─ #2" .. string.rep(" ", 24) .. " ◐ doing ─╮", first)
+    eq(nil, first:sub(#"╭─ #2" + 1, #"╭─ #2" + 24):find("─", 1, true), "the id/status gap is filled with spaces")
     for offset = 0, 3 do
       eq(40, util.display_width(out.lines[out.id_to_line["#2"] + offset]))
     end
@@ -245,20 +246,24 @@ describe("render.list card style", function()
     truthy(status_seen, "the status segment must keep its status colour")
   end)
 
-  it("colours the id, status, title and tag of a card", function()
+  it("colours id, status, title and tag of a selected card", function()
     local out = card({ selected_id = "#2" })
     local line = out.id_to_line["#2"]
-    local groups = {}
-    for _, range in ipairs(out.ranges) do
-      if range.line == line or range.line == line + 1 or range.line == line + 2 then
-        groups[range.hl_group] = true
-      end
-    end
 
-    truthy(groups.LoopKitId)
-    truthy(groups.LoopKitDoing)
-    truthy(groups.LoopKitTitle)
-    truthy(groups.LoopKitTag)
+    eq("LoopKitId", owners(out, line)[#"╭─ " + 1], "selected id keeps its colour")
+    eq("LoopKitDoing", owners(out, line)[out.lines[line]:find("◐ doing", 1, true)], "status keeps its colour")
+    eq("Normal", owners(out, line + 1)[#"│ " + 1], "selected title uses the normal text colour")
+    eq("LoopKitTag", owners(out, line + 2)[#"│ " + 1], "selected tag keeps its colour")
+  end)
+
+  it("mutes id, tag and title of unselected cards", function()
+    local out = card({ selected_id = "#2" })
+    local line = out.id_to_line["#1"]
+
+    eq("LoopKitMuted", owners(out, line)[#"╭─ " + 1], "unselected id is muted")
+    eq("LoopKitPending", owners(out, line)[out.lines[line]:find("○ pending", 1, true)], "status keeps its colour")
+    eq("LoopKitMuted", owners(out, line + 1)[#"│ " + 1], "unselected title is muted")
+    eq("LoopKitMuted", owners(out, line + 2)[#"│ " + 1], "unselected tag is muted")
   end)
 
   it("labels the meta line for string, table and default flows", function()
@@ -329,15 +334,14 @@ describe("render.list card style", function()
     eq(1, select(2, out.lines[line + 1]:gsub("…", "")))
   end)
 
-  it("keeps content ranges identical on selected and unselected cards", function()
+  it("keeps content range geometry identical on selected and unselected cards", function()
     local function snapshot(selected_id)
       local out = card({ selected_id = selected_id })
       local base = out.id_to_line["#2"]
       local got = {}
       for _, range in ipairs(out.ranges) do
         if range.line >= base and range.line <= base + 2 then
-          local group = range.hl_group == "LoopKitCardSelected" and "LoopKitMuted" or range.hl_group
-          got[#got + 1] = string.format("%d:%d:%d:%s", range.line - base, range.col_start, range.col_end, group)
+          got[#got + 1] = string.format("%d:%d:%d", range.line - base, range.col_start, range.col_end)
         end
       end
       return got

@@ -226,7 +226,7 @@ describe("ui.list: card style", function()
 
     eq(20, #lines)
     local line = rendered.id_to_line["#2"]
-    eq("╭─ #2" .. string.rep("─", 24) .. " ◐ doing ─╮", lines[line])
+    eq("╭─ #2" .. string.rep(" ", 24) .. " ◐ doing ─╮", lines[line])
     eq("│ " .. "Beta doing" .. string.rep(" ", 26) .. " │", lines[line + 1])
     eq("│ " .. "fix · human · auto" .. string.rep(" ", 18) .. " │", lines[line + 2])
     eq("╰" .. string.rep("─", 38) .. "╯", lines[line + 3])
@@ -260,6 +260,30 @@ describe("ui.list: card style", function()
         eq("LoopKitCardSelected", group, "column " .. col .. " must use LoopKitCardSelected")
       end
     end
+  end)
+
+  it("mutes unselected card parts and keeps the selected title plain", function()
+    local list, state = make_card_list()
+    state:select("#2")
+    local rendered = list:draw()
+
+    local function group_at(line, col)
+      for _, range in ipairs(rendered.ranges) do
+        if range.line == line and col > range.col_start and col <= range.col_end then
+          return range.hl_group
+        end
+      end
+    end
+
+    local selected = rendered.id_to_line["#2"]
+    eq("LoopKitId", group_at(selected, #"╭─ " + 1))
+    eq("Normal", group_at(selected + 1, #"│ " + 1))
+    eq("LoopKitTag", group_at(selected + 2, #"│ " + 1))
+
+    local other = rendered.id_to_line["#1"]
+    eq("LoopKitMuted", group_at(other, #"╭─ " + 1))
+    eq("LoopKitMuted", group_at(other + 1, #"│ " + 1))
+    eq("LoopKitMuted", group_at(other + 2, #"│ " + 1))
   end)
 
   it("uses the window width when the list has one", function()

@@ -178,7 +178,13 @@ local function card_rows(task, icons, width, selected)
     origin = "human"
   end
 
-  -- Line 1: ╭─ #id ────── <icon> <status> ─╮
+  -- Selected cards keep the accent colours; unselected cards recede into the
+  -- comment colour, and only the selected title uses the normal text colour.
+  local id_hl = selected and "LoopKitId" or "LoopKitMuted"
+  local title_hl = selected and "Normal" or "LoopKitMuted"
+  local tag_hl = selected and "LoopKitTag" or "LoopKitMuted"
+
+  -- Line 1: ╭─ #id  (space fill)  <icon> <status> ─╮
   local head = "╭─ "
   local status_text = icon .. " " .. status
   local suffix = " " .. status_text
@@ -194,7 +200,7 @@ local function card_rows(task, icons, width, selected)
   local border_start, border_end
   local status_start, status_end
   if head_w + id_w + suffix_w + tail_w + 1 <= width then
-    local fill = string.rep("─", width - head_w - id_w - suffix_w - tail_w)
+    local fill = string.rep(" ", width - head_w - id_w - suffix_w - tail_w)
     line1 = head .. id_text .. fill .. suffix .. tail
     border_start = #head + #id_text + #fill
     border_end = border_start + 1
@@ -212,7 +218,7 @@ local function card_rows(task, icons, width, selected)
   end
 
   push(1, 0, #head, border_hl)
-  push(1, #head, id_end, "LoopKitId")
+  push(1, #head, id_end, id_hl)
   if border_start > id_end then
     push(1, id_end, border_start, border_hl)
   end
@@ -228,12 +234,12 @@ local function card_rows(task, icons, width, selected)
   local shown_title = util.truncate_display(title, inner)
   rows[2] = "│ " .. util.pad_display(shown_title, inner) .. " │"
   push(2, 0, #"│ ", border_hl)
-  push(2, #"│ ", #"│ " + #shown_title, "LoopKitTitle")
+  push(2, #"│ ", #"│ " + #shown_title, title_hl)
   push(2, #"│ " + #shown_title, #rows[2], border_hl)
 
   local segments = {}
   if tag ~= "" then
-    segments[#segments + 1] = { text = tag, hl = "LoopKitTag" }
+    segments[#segments + 1] = { text = tag, hl = tag_hl }
   end
   segments[#segments + 1] = { text = origin, hl = "LoopKitMuted" }
   local flow = flow_label(task.flow)
