@@ -121,6 +121,250 @@ describe("render.list", function()
   end)
 end)
 
+describe("render.list card style", function()
+  local util = require("loop-kit.util")
+
+  local function card_state(tasks)
+    return new_state(tasks or {
+      task("#1", "pending", { title = "Alpha task", tag = "feat" }),
+      task("#2", "doing", { title = "Beta doing", tag = "fix" }),
+      task("#3", "done", { title = "Gamma done", tag = "chore" }),
+    }, "all")
+  end
+
+  local function card(opts)
+    opts = opts or {}
+    return render.list(card_state(opts.tasks):groups(), {
+      style = "card",
+      width = opts.width or 40,
+      selected_id = opts.selected_id,
+    })
+  end
+
+  it("renders a four-line card with a status header", function()
+    local out = card({ selected_id = "#2", width = 40 })
+
+    eq(12, #out.lines)
+    local first = out.lines[out.id_to_line["#2"]]
+    eq("╭─ #2" .. string.rep("─", 24) .. " ◐ doing ─╮", first)
+    for offset = 0, 3 do
+      eq(40, util.display_width(out.lines[out.id_to_line["#2"] + offset]))
+    end
+  end)
+
+  it("puts the truncated title and the meta line inside the box", function()
+    local out = card({ selected_id = "#2" })
+    local line = out.id_to_line["#2"]
+
+    eq("│ " .. "Beta doing" .. string.rep(" ", 26) .. " │", out.lines[line + 1])
+    eq("│ " .. "fix · human · auto" .. string.rep(" ", 18) .. " │", out.lines[line + 2])
+    eq("╰" .. string.rep("─", 38) .. "╯", out.lines[line + 3])
+  end)
+
+  it("maps every card row to its task and drops blank separators", function()
+    local out = card({ selected_id = "#1" })
+
+    eq("#1", out.line_map[1])
+    eq("#1", out.line_map[2])
+    eq("#1", out.line_map[3])
+    eq("#1", out.line_map[4])
+    eq("#2", out.line_map[5])
+    eq(1, out.id_to_line["#1"])
+    eq("#1", out.line_map[out.selected_line])
+    eq(nil, out.line_hl[out.selected_line])
+  end)
+
+  local function line_ranges(out, line)
+    local list = {}
+    for _, range in ipairs(out.ranges) do
+      if range.line == line then
+        list[#list + 1] = range
+      end
+    end
+    table.sort(list, function(a, b)
+      return a.col_start < b.col_start
+    end)
+    return list
+  end
+
+  local function owners(out, line)
+    local map = {}
+    for _, range in ipairs(line_ranges(out, line)) do
+      for col = range.col_start + 1, range.col_end do
+        map[col] = range.hl_group
+      end
+    end
+    return map
+  end
+
+  local function assert_border(out, line, border, content)
+    local text = out.lines[line]
+    local map = owners(out, line)
+    for col = 1, #text do
+      local group = map[col]
+      truthy(group, "uncovered byte at column " .. col .. " of line " .. line)
+      if not (content and content[group]) then
+        eq(border, group, "column " .. col .. " of line " .. line .. " must use " .. border)
+      end
+    end
+  end
+
+  it("highlights the whole border in the selected colour", function()
+    local out = card({ selected_id = "#2" })
+    local selected_line = out.id_to_line["#2"]
+    local muted_line = out.id_to_line["#1"]
+
+    assert_border(out, selected_line, "LoopKitCardSelected", {
+      LoopKitId = true,
+      LoopKitDoing = true,
+    })
+    assert_border(out, selected_line + 3, "LoopKitCardSelected")
+    assert_border(out, muted_line, "LoopKitMuted", {
+      LoopKitId = true,
+      LoopKitPending = true,
+    })
+    assert_border(out, muted_line + 3, "LoopKitMuted")
+
+    -- The vertical frame of the title and meta rows is border too.
+    for offset = 1, 2 do
+      local map = owners(out, selected_line + offset)
+      for col = 1, #"│ " do
+        eq("LoopKitCardSelected", map[col])
+      end
+      for col = #map - 1, #map do
+        eq("LoopKitCardSelected", map[col])
+      end
+    end
+
+    local status_seen = false
+    for _, group in pairs(owners(out, selected_line)) do
+      if group == "LoopKitDoing" then
+        status_seen = true
+      end
+    end
+    truthy(status_seen, "the status segment must keep its status colour")
+  end)
+
+  it("colours the id, status, title and tag of a card", function()
+    local out = card({ selected_id = "#2" })
+    local line = out.id_to_line["#2"]
+    local groups = {}
+    for _, range in ipairs(out.ranges) do
+      if range.line == line or range.line == line + 1 or range.line == line + 2 then
+        groups[range.hl_group] = true
+      end
+    end
+
+    truthy(groups.LoopKitId)
+    truthy(groups.LoopKitDoing)
+    truthy(groups.LoopKitTitle)
+    truthy(groups.LoopKitTag)
+  end)
+
+  it("labels the meta line for string, table and default flows", function()
+    local function meta(overrides)
+      local tasks = {
+        task("#5", "doing", vim.tbl_extend("force", {
+          title = "Flow task",
+          tag = "fix",
+          origin = "human",
+        }, overrides or {})),
+      }
+      local out = render.list(card_state(tasks):groups(), { style = "card", width = 40 })
+      return out.lines[out.id_to_line["#5"] + 2]
+    end
+
+    local function boxed(text)
+      return "│ " .. util.pad_display(text, 36) .. " │"
+    end
+
+    eq(boxed("fix · human · quick"), meta({ flow = "quick" }))
+    eq(boxed("fix · human · custom"), meta({ flow = { "#1", "#2" } }))
+    eq(boxed("fix · human · auto"), meta({}))
+    eq(boxed("human · auto"), meta({ tag = "" }))
+  end)
+
+  it("keeps blank lines only before group headers in card mode", function()
+    local st = card_state({
+      task("#1", "pending", { title = "Alpha", tag = "feat" }),
+      task("#2", "doing", { title = "Beta", tag = "fix" }),
+      task("#3", "pending", { title = "Gamma", tag = "ui" }),
+    })
+    st:set_sort("status")
+    local out = render.list(st:groups(), { style = "card", width = 40 })
+
+    local blanks = {}
+    for index, line in ipairs(out.lines) do
+      if line == "" then
+        blanks[#blanks + 1] = index
+      end
+    end
+    local expected = {}
+    for index, group in ipairs(out.groups) do
+      if index > 1 then
+        expected[#expected + 1] = group.header_line - 1
+        eq("", out.lines[group.header_line - 1])
+      end
+      eq(nil, out.line_map[group.header_line])
+    end
+    eq(table.concat(expected, ","), table.concat(blanks, ","))
+
+    local line = out.id_to_line["#1"]
+    for offset = 0, 3 do
+      eq("#1", out.line_map[line + offset])
+    end
+    eq("#3", out.line_map[line + 4], "cards of one group must not be separated")
+  end)
+
+  it("truncates long CJK titles with one ellipsis at the card width", function()
+    local out = render.list(card_state({
+      task("#9", "doing", { title = string.rep("超长中文标题", 8), tag = "feat" }),
+    }):groups(), { style = "card", width = 24 })
+    local line = out.id_to_line["#9"]
+
+    for offset = 0, 3 do
+      eq(24, util.display_width(out.lines[line + offset]))
+    end
+    truthy(out.lines[line + 1]:find("…", 1, true), "the title must end in an ellipsis")
+    eq(1, select(2, out.lines[line + 1]:gsub("…", "")))
+  end)
+
+  it("keeps content ranges identical on selected and unselected cards", function()
+    local function snapshot(selected_id)
+      local out = card({ selected_id = selected_id })
+      local base = out.id_to_line["#2"]
+      local got = {}
+      for _, range in ipairs(out.ranges) do
+        if range.line >= base and range.line <= base + 2 then
+          local group = range.hl_group == "LoopKitCardSelected" and "LoopKitMuted" or range.hl_group
+          got[#got + 1] = string.format("%d:%d:%d:%s", range.line - base, range.col_start, range.col_end, group)
+        end
+      end
+      return got
+    end
+
+    local unselected = snapshot(nil)
+    local selected = snapshot("#2")
+    eq(table.concat(unselected, "|"), table.concat(selected, "|"))
+  end)
+
+  it("falls back to compact rows for unknown styles", function()
+    local compact = render.list(card_state():groups(), { width = 40 })
+    local unknown = render.list(card_state():groups(), { style = "gallery", width = 40 })
+
+    eq(table.concat(compact.lines, "\n"), table.concat(unknown.lines, "\n"))
+  end)
+
+  it("keeps four valid rows in a narrow card", function()
+    local out = card({ width = 12 })
+    local line = out.id_to_line["#1"]
+
+    for offset = 0, 3 do
+      eq(12, util.display_width(out.lines[line + offset]))
+    end
+  end)
+end)
+
 describe("render.detail", function()
   it("renders deps and doc with explicit empty values", function()
     local out = render.detail(task("#7", "doing", {
@@ -351,6 +595,7 @@ describe("loop-kit highlights", function()
     LoopKitHeader = "Label",
     LoopKitError = "ErrorMsg",
     LoopKitSelected = "Visual",
+    LoopKitCardSelected = "Special",
     LoopKitPickerSelected = "CursorLineNr",
   }
 

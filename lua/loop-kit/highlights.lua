@@ -15,6 +15,7 @@ M.links = {
   LoopKitHeader = "Label",
   LoopKitError = "ErrorMsg",
   LoopKitSelected = "Visual",
+  LoopKitCardSelected = "Special",
   LoopKitPickerSelected = "CursorLineNr",
   LoopKitDetailTitle = "Title",
   LoopKitDetailSection = "Title",

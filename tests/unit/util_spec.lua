@@ -1,0 +1,61 @@
+-- Unit tests for the shared display-width helpers used by the card list style.
+local util = require("loop-kit.util")
+
+describe("util.display_width", function()
+  it("counts ASCII, box drawing and wide characters", function()
+    eq(3, util.display_width("abc"))
+    eq(0, util.display_width(""))
+    eq(4, util.display_width("中文"))
+    eq(2, util.display_width("😀"))
+    eq(3, util.display_width("╭─╮"))
+    eq(7, util.display_width("#12 · x"))
+  end)
+
+  it("tolerates non-string input", function()
+    eq(0, util.display_width(nil))
+    eq(0, util.display_width(42))
+  end)
+
+  it("treats control and combining characters as zero width", function()
+    eq(3, util.display_width(string.char(1) .. "abc"))
+    eq(0, util.display_width(string.char(9) .. string.char(10)))
+    -- U+0301 COMBINING ACUTE ACCENT (UTF-8: 0xCC 0x81) joins the previous cell.
+    local combining = string.char(0xCC, 0x81)
+    eq(1, util.display_width("e" .. combining))
+    eq(3, util.display_width("e" .. combining .. "ab"))
+  end)
+end)
+
+describe("util.truncate_display", function()
+  it("returns short text unchanged", function()
+    eq("abc", util.truncate_display("abc", 3))
+    eq("中文", util.truncate_display("中文", 4))
+  end)
+
+  it("appends a single ellipsis and respects the column budget", function()
+    eq("abc…", util.truncate_display("abcdef", 4))
+    eq(4, util.display_width(util.truncate_display("abcdef", 4)))
+  end)
+
+  it("never splits a wide character", function()
+    local truncated = util.truncate_display("中文标题", 5)
+    eq("中文…", truncated)
+    eq(5, util.display_width(truncated))
+  end)
+
+  it("degrades safely at tiny budgets", function()
+    eq("", util.truncate_display("abc", 0))
+    eq("…", util.truncate_display("abc", 1))
+  end)
+end)
+
+describe("util.pad_display", function()
+  it("pads to the requested display width", function()
+    eq("中文  ", util.pad_display("中文", 6))
+    eq(6, util.display_width(util.pad_display("中文", 6)))
+  end)
+
+  it("does not shorten text that is already wide enough", function()
+    eq("abcdef", util.pad_display("abcdef", 3))
+  end)
+end)

@@ -148,6 +148,7 @@ require("loop-kit").setup({
   sort = "id_desc",        -- id_desc/id_asc/closed_desc/closed_asc/status/title
   show_winbar = true,      -- 左窗是否显示 winbar（右窗始终显示）
   show_hint = true,        -- 左窗是否显示顶部键位提示行
+  display_style = "compact", -- compact（两行任务）/ card（四行卡片）
   icons = { pending = "○", doing = "◐", done = "●", blocked = "✕" },
   confirm = { done = true, force_done = true, block = true, remove = true },
   keys = {},               -- lhs → 动作名；false 表示禁用
@@ -172,6 +173,22 @@ require("loop-kit").setup({
 `claim`、`done`、`force_done`、`block`、`edit`、`add`、`remove`、`open_doc`、
 `flow`、`private`、`touch`、`meta`、`decide`、`help`、`close`。插件不写任何全局
 键位。
+
+### 显示样式
+
+`display_style` 控制任务列表的行样式，默认 `compact`（每任务两行：`┌ #id · 图标 状态 · tag`
+与 `└ 标题`）。设为 `card` 时每个任务占四行：
+
+```text
+╭─ #12 ─────────────── ◐ doing ─╮
+│ 截断后的标题                  │
+│ feat · human · auto           │
+╰───────────────────────────────╯
+```
+
+card 样式不插入任务间空行，标题按卡片宽度（取列表窗口实际宽度）截断。选中态不再使用
+整行 `Visual`，而是把整圈边框换成 `LoopKitCardSelected`（链接 `Special`）；未选中边框用
+`LoopKitMuted`。非法值（非 `compact` / `card`）回退为 `compact`。
 
 ## 字段级编辑
 
@@ -285,6 +302,7 @@ loop.reset()
 高亮组：`LoopKitPending`、`LoopKitDoing`、`LoopKitDone`、`LoopKitBlocked`、
 `LoopKitId`、`LoopKitTitle`、`LoopKitTag`、`LoopKitMuted`、`LoopKitHeader`、
 `LoopKitError`、`LoopKitSelected`（任务列表选中行，链接 `Visual`）、
+`LoopKitCardSelected`（card 样式选中卡片的边框，链接 `Special`）、
 `LoopKitPickerSelected`（多选界面选中标记，链接 `CursorLineNr`），以及详情窗的
 `LoopKitDetailTitle`、
 `LoopKitDetailSection`、`LoopKitDetailKey`、`LoopKitDetailValue`、`LoopKitDetailPath`、

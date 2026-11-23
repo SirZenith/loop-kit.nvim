@@ -115,6 +115,7 @@ describe("plugin registration and defaults", function()
     eq("id_desc", cfg.sort)
     eq(true, cfg.show_winbar)
     eq(true, cfg.show_hint)
+    eq("compact", cfg.display_style)
     eq("○", cfg.icons.pending)
     eq("◐", cfg.icons.doing)
     eq("●", cfg.icons.done)
@@ -214,6 +215,69 @@ describe("public API against the fake CLI", function()
     local alpha, zulu = index_of("Alpha task"), index_of("Zulu task")
     truthy(alpha and zulu, "both tasks must be rendered")
     truthy(alpha < zulu, "sort=title must order Alpha before Zulu")
+
+    close_all()
+  end)
+
+  it("forwards setup.display_style to the list", function()
+    local root = project()
+    local run = function(_argv, _opts, cb)
+      vim.schedule(function()
+        cb({ ok = true, data = { source = { kind = "local" }, tasks = TASKS } })
+      end)
+      return nil
+    end
+    local source = source_mod.new({ run = run, root = util.normalize_root(root) })
+    loopkit.reset()
+    loopkit.setup({ cli_path = fake_cli.fixture, auto_sync = false, display_style = "card" })
+    eq("card", require("loop-kit.ui.board").config.display_style)
+
+    local board = loopkit.open({ root = root, source = source })
+    wait_for(function()
+      return board.loaded
+    end)
+
+    eq("card", board.list.style)
+    local lines = vim.api.nvim_buf_get_lines(board.list_buf, 0, -1, false)
+    local has_card = false
+    for _, line in ipairs(lines) do
+      if line:find("╭─ #", 1, true) then
+        has_card = true
+        break
+      end
+    end
+    truthy(has_card, "setup.display_style=card must render card borders")
+
+    close_all()
+  end)
+
+  it("falls back to compact rows for an invalid display_style", function()
+    local root = project()
+    local run = function(_argv, _opts, cb)
+      vim.schedule(function()
+        cb({ ok = true, data = { source = { kind = "local" }, tasks = TASKS } })
+      end)
+      return nil
+    end
+    local source = source_mod.new({ run = run, root = util.normalize_root(root) })
+    loopkit.reset()
+    loopkit.setup({ cli_path = fake_cli.fixture, auto_sync = false, display_style = "gallery" })
+    eq("compact", loopkit.defaults().display_style)
+
+    local board = loopkit.open({ root = root, source = source, display_style = "gallery" })
+    wait_for(function()
+      return board.loaded
+    end)
+
+    local lines = vim.api.nvim_buf_get_lines(board.list_buf, 0, -1, false)
+    local compact = false
+    for _, line in ipairs(lines) do
+      if line:find("┌ #", 1, true) then
+        compact = true
+        break
+      end
+    end
+    truthy(compact, "an invalid display_style must fall back to compact rows")
 
     close_all()
   end)

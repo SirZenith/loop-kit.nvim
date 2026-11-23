@@ -217,4 +217,125 @@ function M.truncate(text, max)
   return text:sub(1, max) .. "… [truncated]"
 end
 
+local WIDE_RANGES = {
+  { 0x1100, 0x115F },
+  { 0x2E80, 0xA4CF },
+  { 0xAC00, 0xD7A3 },
+  { 0xF900, 0xFAFF },
+  { 0xFE30, 0xFE6F },
+  { 0xFF00, 0xFF60 },
+  { 0xFFE0, 0xFFE6 },
+  { 0x1F300, 0x1FAFF },
+  { 0x20000, 0x3FFFD },
+}
+
+local ZERO_WIDTH_RANGES = {
+  { 0x0300, 0x036F },
+  { 0x1AB0, 0x1AFF },
+  { 0x1DC0, 0x1DFF },
+  { 0x20D0, 0x20FF },
+  { 0xFE20, 0xFE2F },
+}
+
+local function char_width(code)
+  if code < 0x20 or (code >= 0x7F and code <= 0x9F) then
+    return 0
+  end
+  for _, range in ipairs(ZERO_WIDTH_RANGES) do
+    if code >= range[1] and code <= range[2] then
+      return 0
+    end
+  end
+  for _, range in ipairs(WIDE_RANGES) do
+    if code >= range[1] and code <= range[2] then
+      return 2
+    end
+  end
+  return 1
+end
+
+--- Iterate UTF-8 characters as (code point, byte start, byte size).
+-- Works on LuaJIT builds where the global `utf8` library is missing.
+local function utf8_chars(text)
+  local index, length = 1, #text
+  return function()
+    if index > length then
+      return nil
+    end
+    local byte = text:byte(index)
+    local size, code
+    if byte < 0x80 then
+      size, code = 1, byte
+    elseif byte < 0xE0 then
+      size = 2
+      code = (byte - 0xC0) * 0x40 + ((text:byte(index + 1) or 0) - 0x80)
+    elseif byte < 0xF0 then
+      size = 3
+      code = (byte - 0xE0) * 0x1000
+        + (((text:byte(index + 1) or 0) - 0x80) * 0x40)
+        + ((text:byte(index + 2) or 0) - 0x80)
+    else
+      size = 4
+      code = (byte - 0xF0) * 0x40000
+        + (((text:byte(index + 1) or 0) - 0x80) * 0x1000)
+        + (((text:byte(index + 2) or 0) - 0x80) * 0x40)
+        + ((text:byte(index + 3) or 0) - 0x80)
+    end
+    local start = index
+    index = index + size
+    return code, start, size
+  end
+end
+
+--- Terminal display width of `text`: wide (CJK, emoji) characters count as 2.
+function M.display_width(text)
+  if type(text) ~= "string" or text == "" then
+    return 0
+  end
+  local total = 0
+  for code in utf8_chars(text) do
+    total = total + char_width(code)
+  end
+  return total
+end
+
+--- Truncate `text` to at most `limit` display columns, ending in a single "…".
+-- Never splits a multi-byte character.
+function M.truncate_display(text, limit)
+  if type(text) ~= "string" then
+    return ""
+  end
+  limit = math.max(0, math.floor(tonumber(limit) or 0))
+  if M.display_width(text) <= limit then
+    return text
+  end
+  if limit <= 0 then
+    return ""
+  end
+  if limit == 1 then
+    return "…"
+  end
+  local pieces, width = {}, 0
+  for code, start, size in utf8_chars(text) do
+    local cost = char_width(code)
+    if width + cost > limit - 1 then
+      break
+    end
+    pieces[#pieces + 1] = text:sub(start, start + size - 1)
+    width = width + cost
+  end
+  return table.concat(pieces) .. "…"
+end
+
+--- Pad `text` on the right with spaces up to `width` display columns.
+function M.pad_display(text, width)
+  text = type(text) == "string" and text or ""
+  width = math.floor(tonumber(width) or 0)
+  local pad = width - M.display_width(text)
+  if pad <= 0 then
+    return text
+  end
+  return text .. string.rep(" ", pad)
+end
+
 return M

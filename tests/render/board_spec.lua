@@ -53,6 +53,7 @@ local function open_board(overrides)
     keys = overrides.keys,
     show_winbar = overrides.show_winbar,
     show_hint = overrides.show_hint,
+    display_style = overrides.display_style,
     notify = function(message)
       notifications[#notifications + 1] = message
     end,
@@ -434,6 +435,46 @@ describe("ui.board: range navigation", function()
 
     b:handle("<C-b>")
     eq(ids[1], state:selected_id(), "<C-b> moves a full page up")
+
+    close_board(b)
+  end)
+end)
+
+describe("ui.board: card display style", function()
+  it("renders the list as cards when display_style is configured", function()
+    local b, _, state = open_board({ auto_refresh = false, display_style = "card" })
+    eq("card", b.list.style)
+
+    state:set_filter("all")
+    state:set_tasks(TASKS)
+    b.list:draw()
+
+    local lines = vim.api.nvim_buf_get_lines(b.list_buf, 0, -1, false)
+    local util = require("loop-kit.util")
+    local card_line = nil
+    for index, line in ipairs(lines) do
+      if line:find("╭─ #", 1, true) then
+        card_line = index
+        break
+      end
+    end
+    truthy(card_line, "card border must be rendered")
+    local width = vim.api.nvim_win_get_width(b.list_win)
+    for offset = 0, 3 do
+      eq(width, util.display_width(lines[card_line + offset]))
+    end
+
+    close_board(b)
+  end)
+
+  it("defaults to the compact style", function()
+    local b, _, state = open_board({ auto_refresh = false })
+    eq("compact", b.list.style)
+
+    state:set_filter("all")
+    state:set_tasks(TASKS)
+    local lines = table.concat(b.list:draw().lines, "\n")
+    truthy(lines:find("┌ #", 1, true), "compact rows must be the default")
 
     close_board(b)
   end)

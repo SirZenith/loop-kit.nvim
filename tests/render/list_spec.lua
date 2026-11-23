@@ -200,3 +200,76 @@ describe("ui.list: fixed fixture", function()
     truthy(contains(buffer_lines(buf), "Beta doing"))
   end)
 end)
+
+describe("ui.list: card style", function()
+  local util = require("loop-kit.util")
+
+  local function make_card_list()
+    local state = state_mod.new():get("/tmp/loopkit-list-card")
+    state:set_filter("all")
+    state:set_tasks(FIXTURE)
+    local buf = vim.api.nvim_create_buf(false, true)
+    return list_ui.new({
+      state = state,
+      buf = buf,
+      setup = false,
+      style = "card",
+      width = 40,
+    }), state, buf
+  end
+
+  it("draws one four-line card per task", function()
+    local list, state, buf = make_card_list()
+    state:select("#2")
+    local rendered = list:draw()
+    local lines = buffer_lines(buf)
+
+    eq(20, #lines)
+    local line = rendered.id_to_line["#2"]
+    eq("╭─ #2" .. string.rep("─", 24) .. " ◐ doing ─╮", lines[line])
+    eq("│ " .. "Beta doing" .. string.rep(" ", 26) .. " │", lines[line + 1])
+    eq("│ " .. "fix · human · auto" .. string.rep(" ", 18) .. " │", lines[line + 2])
+    eq("╰" .. string.rep("─", 38) .. "╯", lines[line + 3])
+    for row = line, line + 3 do
+      eq(40, util.display_width(lines[row]))
+      eq("#2", rendered.line_map[row])
+    end
+  end)
+
+  it("marks the selected card border without a full-line highlight", function()
+    local list, state = make_card_list()
+    state:select("#2")
+    local rendered = list:draw()
+    local line = rendered.id_to_line["#2"]
+
+    eq(nil, rendered.line_hl[line])
+
+    local map = {}
+    for _, range in ipairs(rendered.ranges) do
+      if range.line == line then
+        for col = range.col_start + 1, range.col_end do
+          map[col] = range.hl_group
+        end
+      end
+    end
+    local text = rendered.lines[line]
+    for col = 1, #text do
+      local group = map[col]
+      truthy(group, "uncovered byte at column " .. col)
+      if group ~= "LoopKitId" and group ~= "LoopKitDoing" then
+        eq("LoopKitCardSelected", group, "column " .. col .. " must use LoopKitCardSelected")
+      end
+    end
+  end)
+
+  it("uses the window width when the list has one", function()
+    local list, state = make_card_list()
+    local win = vim.api.nvim_get_current_win()
+    list.win = win
+    state:select("#1")
+    local rendered = list:draw()
+    local line = rendered.id_to_line["#1"]
+
+    eq(vim.api.nvim_win_get_width(win), util.display_width(rendered.lines[line]))
+  end)
+end)

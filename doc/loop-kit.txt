@@ -113,6 +113,7 @@ open_doc、flow、private、touch、meta、decide、help、close。插件不写�
     sort = "id_desc",        -- id_desc/id_asc/closed_desc/closed_asc/status/title
     show_winbar = true,      -- 左窗是否显示 winbar（右窗始终显示）
     show_hint = true,        -- 左窗是否显示顶部键位提示行
+    display_style = "compact", -- compact（两行任务）/ card（四行卡片）
     icons = { pending = "○", doing = "◐", done = "●", blocked = "✕" },
     confirm = { done = true, force_done = true, block = true, remove = true },
     keys = {},               -- lhs -> 动作名；false 表示禁用
@@ -122,6 +123,17 @@ open_doc、flow、private、touch、meta、decide、help、close。插件不写�
   require("loop-kit").setup({ keys = { q = false, ["<C-s>"] = "sync" } })
 <
 同一项目的写操作串行执行（FIFO）；写失败保留当前选中、筛选与编辑内容。
+
+display_style = "card" 时任务列表改为四行卡片（组标题保留，卡片之间不留空行）： >text
+  ╭─ #12 ─────────────── ◐ doing ─╮
+  │ 截断后的标题                  │
+  │ feat · human · auto           │
+  ╰───────────────────────────────╯
+<
+卡片宽度取列表窗口实际宽度，标题超宽时以单个 … 截断；第三行按 tag · origin ·
+flow 拼接，过窄时从右向左丢弃段落。选中态不使用整行 Visual，而是把整圈边框
+换成 LoopKitCardSelected（链接 Special）；未选中边框为 LoopKitMuted。非法值
+回退为 compact。
 
 ==============================================================================
 6. 字段级编辑                                                    *loop-kit-edit*
@@ -223,7 +235,8 @@ local 删除与远端移出：
 高亮组均以 default = true 定义并链接到内置组：LoopKitPending、LoopKitDoing、
 LoopKitDone、LoopKitBlocked、LoopKitId、LoopKitTitle、LoopKitTag、
 LoopKitMuted、LoopKitHeader、LoopKitError、LoopKitSelected（任务列表选中行，
-链接 Visual）、LoopKitPickerSelected（多选界面选中标记，链接 CursorLineNr），
+链接 Visual）、LoopKitCardSelected（card 样式选中卡片的边框，链接 Special）、
+LoopKitPickerSelected（多选界面选中标记，链接 CursorLineNr），
 以及详情窗的
 LoopKitDetailTitle、LoopKitDetailSection、LoopKitDetailKey、LoopKitDetailValue、
 LoopKitDetailPath、LoopKitDetailMuted、LoopKitDetailId、LoopKitDetailTag。

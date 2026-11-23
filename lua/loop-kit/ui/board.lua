@@ -67,6 +67,7 @@ M.config = {
   auto_sync = true,
   show_winbar = true,
   show_hint = true,
+  display_style = "compact",
   keys = {},
 }
 
@@ -217,6 +218,8 @@ function Board:_create_ui()
     win = list_win,
     icons = self.opts.icons or M.config.icons,
     sort = self.opts.sort or M.config.sort,
+    style = self.opts.display_style or M.config.display_style,
+    width = width,
     on_select = function()
       self:_draw_detail()
     end,
@@ -316,7 +319,12 @@ function Board:_resize()
   end
   if valid_win(self.list_win) then
     local max_width = math.max(10, vim.o.columns - 20)
-    pcall(vim.api.nvim_win_set_width, self.list_win, math.min(self.width, max_width))
+    local target = math.min(self.width, max_width)
+    local ok, before = pcall(vim.api.nvim_win_get_width, self.list_win)
+    pcall(vim.api.nvim_win_set_width, self.list_win, target)
+    if ok and before ~= target and self.list then
+      self.list:draw()
+    end
   end
 end
 

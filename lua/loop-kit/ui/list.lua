@@ -44,6 +44,8 @@ function M.new(opts)
   self.win = opts.win
   self.icons = opts.icons
   self.sort = opts.sort
+  self.style = opts.style
+  self.width = tonumber(opts.width)
   self.on_select = opts.on_select
   self.hint = nil
   self.rendered = nil
@@ -131,10 +133,19 @@ function List:draw(opts)
   if not valid_buf(self.buf) then
     return nil
   end
+  local width = self.width
+  if valid_win(self.win) then
+    local ok, value = pcall(vim.api.nvim_win_get_width, self.win)
+    if ok and tonumber(value) and value > 0 then
+      width = value
+    end
+  end
   local rendered = render.list(self.state:groups(), {
     icons = self.icons,
     selected_id = self.state:selected_id(),
     sort = self.sort,
+    style = self.style,
+    width = width,
     flat = self.state.sort ~= "status" and self.state.sort ~= "title",
     presorted = true,
   })

@@ -32,6 +32,7 @@ local function defaults()
     sort = "id_desc",
     show_winbar = true,
     show_hint = true,
+    display_style = "compact",
     icons = {
       pending = "○",
       doing = "◐",
@@ -60,12 +61,16 @@ end
 function M.setup(opts)
   opts = opts or {}
   M._config = vim.tbl_deep_extend("force", defaults(), opts)
+  if M._config.display_style ~= "card" then
+    M._config.display_style = "compact"
+  end
   board.setup({
     list_width = M._config.list_width,
     default_filter = M._config.default_filter,
     sort = M._config.sort,
     show_winbar = M._config.show_winbar,
     show_hint = M._config.show_hint,
+    display_style = M._config.display_style,
     auto_sync = M._config.auto_sync,
     icons = M._config.icons,
     keys = M._config.keys,
@@ -85,6 +90,7 @@ function M.reset()
     sort = M._config.sort,
     show_winbar = M._config.show_winbar,
     show_hint = M._config.show_hint,
+    display_style = M._config.display_style,
     auto_sync = M._config.auto_sync,
     icons = M._config.icons,
     keys = M._config.keys,
@@ -225,6 +231,7 @@ function M.open(opts)
   if opts.show_hint == nil then
     opts.show_hint = M._config.show_hint
   end
+  opts.display_style = opts.display_style or M._config.display_style
   opts.icons = opts.icons or M._config.icons
   opts.confirm = opts.confirm or M._config.confirm
   opts.keys = opts.keys or M._config.keys

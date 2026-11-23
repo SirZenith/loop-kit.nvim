@@ -93,10 +93,200 @@ local function status_hl(status)
   return "LoopKitPending"
 end
 
+--- Two-line compact rows for one task; ranges are relative to the card rows.
+local function compact_rows(task, icons)
+  local rows, ranges = {}, {}
+  local function push(row, start_col, end_col, hl_group)
+    ranges[#ranges + 1] = {
+      row = row,
+      col_start = start_col,
+      col_end = end_col,
+      hl_group = hl_group,
+    }
+  end
+
+  local id = util.normalize_id(task.id) or tostring(task.id or "")
+  local status = type(task.status) == "string" and task.status:lower() or "pending"
+  local icon = icons[status] or "?"
+  local title = one_line(task.title)
+  if title == "" then
+    title = "(untitled)"
+  end
+  local tag = type(task.tag) == "string" and one_line(task.tag) or ""
+
+  local top_prefix = "┌ "
+  local bottom_prefix = "└ "
+  local first = string.format("%s%s · %s %s", top_prefix, id, icon, status)
+  if tag ~= "" then
+    first = first .. " · " .. tag
+  end
+  rows[1] = first
+  rows[2] = bottom_prefix .. title
+
+  push(1, 0, #top_prefix, "LoopKitMuted")
+  local col = #top_prefix
+  push(1, col, col + #id, "LoopKitId")
+  col = col + #id + #" · "
+  push(1, col, col + #icon, status_hl(status))
+  col = col + #icon + #" "
+  push(1, col, col + #status, status_hl(status))
+  if tag ~= "" then
+    col = col + #status + #" · "
+    push(1, col, col + #tag, "LoopKitTag")
+  end
+  push(2, 0, #bottom_prefix, "LoopKitMuted")
+
+  return rows, ranges
+end
+
+--- Human-readable flow label used on the card meta line.
+local function flow_label(flow)
+  if type(flow) == "table" then
+    return "custom"
+  end
+  if flow == nil or flow == vim.NIL or flow == "" or flow == "default" then
+    return "auto"
+  end
+  return one_line(tostring(flow))
+end
+
+--- Four-line card rows for one task; ranges are relative to the card rows.
+local function card_rows(task, icons, width, selected)
+  local rows, ranges = {}, {}
+  local border_hl = selected and "LoopKitCardSelected" or "LoopKitMuted"
+  local function push(row, start_col, end_col, hl_group)
+    if end_col > start_col then
+      ranges[#ranges + 1] = {
+        row = row,
+        col_start = start_col,
+        col_end = end_col,
+        hl_group = hl_group,
+      }
+    end
+  end
+
+  local id = util.normalize_id(task.id) or tostring(task.id or "")
+  local status = type(task.status) == "string" and task.status:lower() or "pending"
+  local icon = icons[status] or "?"
+  local title = one_line(task.title)
+  if title == "" then
+    title = "(untitled)"
+  end
+  local tag = type(task.tag) == "string" and one_line(task.tag) or ""
+  local origin = type(task.origin) == "string" and one_line(task.origin) or ""
+  if origin == "" then
+    origin = "human"
+  end
+
+  -- Line 1: ╭─ #id ────── <icon> <status> ─╮
+  local head = "╭─ "
+  local status_text = icon .. " " .. status
+  local suffix = " " .. status_text
+  local tail = " ─╮"
+  local id_text = id
+  local head_w = util.display_width(head)
+  local id_w = util.display_width(id_text)
+  local suffix_w = util.display_width(suffix)
+  local tail_w = util.display_width(tail)
+
+  local line1
+  local id_end = #head + #id_text
+  local border_start, border_end
+  local status_start, status_end
+  if head_w + id_w + suffix_w + tail_w + 1 <= width then
+    local fill = string.rep("─", width - head_w - id_w - suffix_w - tail_w)
+    line1 = head .. id_text .. fill .. suffix .. tail
+    border_start = #head + #id_text + #fill
+    border_end = border_start + 1
+    status_start = border_start + 1
+    status_end = status_start + #suffix
+  else
+    -- Too narrow for the status block: keep the id and a plain border.
+    id_text = util.truncate_display(id, math.max(1, width - head_w - 2))
+    id_end = #head + #id_text
+    id_w = util.display_width(id_text)
+    local fill = string.rep("─", math.max(0, width - head_w - id_w - 2))
+    line1 = head .. id_text .. " " .. fill .. "╮"
+    border_start = id_end
+    border_end = #line1
+  end
+
+  push(1, 0, #head, border_hl)
+  push(1, #head, id_end, "LoopKitId")
+  if border_start > id_end then
+    push(1, id_end, border_start, border_hl)
+  end
+  push(1, border_start, border_end, border_hl)
+  if status_start then
+    push(1, status_start, status_end, status_hl(status))
+    push(1, status_end, #line1, border_hl)
+  end
+  rows[1] = line1
+
+  -- Lines 2 and 3: title and tag · origin · flow, padded inside the box.
+  local inner = math.max(1, width - 4)
+  local shown_title = util.truncate_display(title, inner)
+  rows[2] = "│ " .. util.pad_display(shown_title, inner) .. " │"
+  push(2, 0, #"│ ", border_hl)
+  push(2, #"│ ", #"│ " + #shown_title, "LoopKitTitle")
+  push(2, #"│ " + #shown_title, #rows[2], border_hl)
+
+  local segments = {}
+  if tag ~= "" then
+    segments[#segments + 1] = { text = tag, hl = "LoopKitTag" }
+  end
+  segments[#segments + 1] = { text = origin, hl = "LoopKitMuted" }
+  local flow = flow_label(task.flow)
+  if flow ~= "" then
+    segments[#segments + 1] = { text = flow, hl = "LoopKitMuted" }
+  end
+
+  local function join_text(parts)
+    local texts = {}
+    for index, segment in ipairs(parts) do
+      texts[index] = segment.text
+    end
+    return table.concat(texts, " · ")
+  end
+
+  local meta = join_text(segments)
+  while util.display_width(meta) > inner and #segments > 1 do
+    table.remove(segments)
+    meta = join_text(segments)
+  end
+  if #segments == 1 and util.display_width(meta) > inner then
+    segments[1].text = util.truncate_display(segments[1].text, inner)
+    meta = segments[1].text
+  end
+
+  rows[3] = "│ " .. util.pad_display(meta, inner) .. " │"
+  push(3, 0, #"│ ", border_hl)
+  local meta_end = #"│ " + #meta
+  local byte_col = #"│ "
+  for index, segment in ipairs(segments) do
+    local start_col = byte_col
+    local end_col = math.min(start_col + #segment.text, meta_end)
+    push(3, start_col, end_col, segment.hl)
+    byte_col = start_col + #segment.text
+    if index < #segments then
+      byte_col = byte_col + #" · "
+    end
+  end
+  push(3, meta_end, #rows[3], border_hl)
+
+  -- Line 4: bottom border.
+  rows[4] = "╰" .. string.rep("─", math.max(0, width - 2)) .. "╯"
+  push(4, 0, #rows[4], border_hl)
+
+  return rows, ranges
+end
+
 function M.list(groups, opts)
   opts = opts or {}
   local icons = vim.tbl_extend("force", M.icons, opts.icons or {})
   local selected = util.normalize_id(opts.selected_id) or opts.selected_id
+  local style = opts.style == "card" and "card" or "compact"
+  local width = math.max(12, math.floor(tonumber(opts.width) or 38))
 
   local out = {
     lines = {},
@@ -166,52 +356,37 @@ function M.list(groups, opts)
       out.groups[#out.groups + 1] = record
 
       for _, task in ipairs(tasks) do
-        if #out.lines > 0 and out.line_map[#out.lines] then
+        local id = util.normalize_id(task.id) or tostring(task.id or "")
+        local is_selected = selected ~= nil and selected == id
+        if style ~= "card" and #out.lines > 0 and out.line_map[#out.lines] then
           out.lines[#out.lines + 1] = ""
         end
-        local id = util.normalize_id(task.id) or tostring(task.id or "")
-        local status = type(task.status) == "string" and task.status:lower() or "pending"
-        local icon = icons[status] or "?"
-        local title = one_line(task.title)
-        if title == "" then
-          title = "(untitled)"
-        end
-        local tag = type(task.tag) == "string" and one_line(task.tag) or ""
 
-        local top_prefix = "┌ "
-        local bottom_prefix = "└ "
-        local first = string.format("%s%s · %s %s", top_prefix, id, icon, status)
-        if tag ~= "" then
-          first = first .. " · " .. tag
+        local rows, row_ranges
+        if style == "card" then
+          rows, row_ranges = card_rows(task, icons, width, is_selected)
+        else
+          rows, row_ranges = compact_rows(task, icons)
         end
-        local second = bottom_prefix .. title
 
         local line = #out.lines + 1
-        out.lines[line] = first
-        out.lines[line + 1] = second
-        out.line_map[line] = id
-        out.line_map[line + 1] = id
+        for index, text in ipairs(rows) do
+          out.lines[line + index - 1] = text
+          out.line_map[line + index - 1] = id
+        end
         out.id_to_line[id] = line
         record.tasks[#record.tasks + 1] = id
 
-        push_range(line, 0, #top_prefix, "LoopKitMuted")
-        local col = #top_prefix
-        push_range(line, col, col + #id, "LoopKitId")
-        col = col + #id + #" · "
-        push_range(line, col, col + #icon, status_hl(status))
-        col = col + #icon + #" "
-        push_range(line, col, col + #status, status_hl(status))
-        if tag ~= "" then
-          col = col + #status + #" · "
-          push_range(line, col, col + #tag, "LoopKitTag")
+        for _, range in ipairs(row_ranges) do
+          push_range(line + range.row - 1, range.col_start, range.col_end, range.hl_group)
         end
 
-        push_range(line + 1, 0, #bottom_prefix, "LoopKitMuted")
-
-        if selected ~= nil and selected == id then
+        if is_selected then
           out.selected_line = line
-          out.line_hl[line] = "LoopKitSelected"
-          out.line_hl[line + 1] = "LoopKitSelected"
+          if style ~= "card" then
+            out.line_hl[line] = "LoopKitSelected"
+            out.line_hl[line + 1] = "LoopKitSelected"
+          end
         end
       end
 
