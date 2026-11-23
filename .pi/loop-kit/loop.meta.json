@@ -352,6 +352,7 @@
     },
     "#30": {
       "doc": ".pi/loop-kit/docs/nvim/2026-11-23T15-24-33-auto-refresh.md",
+      "hash": "a695f0d",
       "flow": "quick",
       "touch": [
         "lua/loop-kit/watch.lua",
