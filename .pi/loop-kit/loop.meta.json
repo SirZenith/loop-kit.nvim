@@ -342,6 +342,7 @@
     },
     "#29": {
       "doc": ".pi/loop-kit/docs/nvim/2026-11-23T14-56-37-item-29.md",
+      "hash": "85819eb",
       "touch": [
         "lua/loop-kit/layout.lua",
         "lua/loop-kit/render.lua",
