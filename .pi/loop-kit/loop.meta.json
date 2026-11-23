@@ -339,6 +339,9 @@
     },
     "#28": {
       "hash": "c8a82c8"
+    },
+    "#29": {
+      "blockedReason": "loop-kit/loop-spec-writer 失败：loop-kit/loop-spec-writer 执行失败：[task failed] Unknown: subagent aborted (exit null): Warning: No project session found with id 'e303fed2-3800-43e2-9705-397cf796eec8'; creating a new session with that id. session: e303fed2-3800-43e2-9705-397cf796eec8"
     }
   }
 }
