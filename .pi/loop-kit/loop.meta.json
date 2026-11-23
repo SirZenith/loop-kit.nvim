@@ -315,6 +315,9 @@
         "tests/render/board_spec.lua",
         "tests/integration/public_spec.lua"
       ]
+    },
+    "#26": {
+      "hash": "a85c936"
     }
   }
 }
