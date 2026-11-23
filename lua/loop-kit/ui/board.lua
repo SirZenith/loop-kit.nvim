@@ -12,6 +12,7 @@ local help_ui = require("loop-kit.ui.help")
 local edit_ui = require("loop-kit.edit")
 local kv = require("loop-kit.kv")
 local picker = require("loop-kit.ui.picker")
+local watch_mod = require("loop-kit.watch")
 
 -- Define the default links as soon as the board is loaded: users are not
 -- required to call setup(), and extmarks resolve hl_group names eagerly.
@@ -66,6 +67,9 @@ M.config = {
   default_filter = "open",
   sort = "id_desc",
   auto_sync = true,
+  watch = true,
+  watch_interval = 1000,
+  sync_on_focus = true,
   show_winbar = true,
   show_hint = true,
   display_style = "compact",
@@ -313,6 +317,13 @@ function Board:_register_autocmds()
       self:_resize()
     end,
   })
+
+  vim.api.nvim_create_autocmd("FocusGained", {
+    group = augroup,
+    callback = function()
+      self:_on_focus()
+    end,
+  })
 end
 
 function Board:_resize()
@@ -360,6 +371,7 @@ function Board:_teardown(opts)
   end
   self.closed = true
   self._request = (self._request or 0) + 1
+  self:_stop_watch()
 
   if self.augroup then
     pcall(vim.api.nvim_del_augroup_by_id, self.augroup)
@@ -536,9 +548,18 @@ function Board:refresh(opts)
   if not self.source then
     self.loaded = false
     self.loading = false
-    self.load_error = self.load_error or "没有可用的 loop-cli"
-    self:draw()
+    if not opts.quiet then
+      self.load_error = self.load_error or "没有可用的 loop-cli"
+      self:draw()
+    end
     return false
+  end
+
+  local previous_tasks
+  local previous_analysis
+  if opts.skip_unchanged and self.state then
+    previous_tasks = self.state.tasks
+    previous_analysis = self.source.snapshot and self.source.snapshot.analysis
   end
 
   self._request = (self._request or 0) + 1
@@ -546,9 +567,11 @@ function Board:refresh(opts)
   if not self.loaded then
     self.loading = true
   end
-  self.syncing = true
-  self.load_error = nil
-  self:_update_winbar()
+  if not opts.quiet then
+    self.syncing = true
+    self.load_error = nil
+    self:_update_winbar()
+  end
 
   local function done(res)
     if self.closed or self._request ~= request then
@@ -557,18 +580,27 @@ function Board:refresh(opts)
     self.syncing = false
     self.loading = false
     res = res or { ok = false, message = "loop-cli 无响应" }
+    local changed = true
+    if res.ok and previous_tasks ~= nil then
+      local next_analysis = self.source and self.source.snapshot and self.source.snapshot.analysis
+      changed = not (vim.deep_equal(previous_tasks, res.tasks)
+        and vim.deep_equal(previous_analysis, next_analysis))
+    end
     if res.ok then
       self.loaded = true
       self.load_error = nil
-      self.state:set_snapshot(res)
-    elseif res.code ~= "stale" then
+      if changed then
+        self.state:set_snapshot(res)
+        self:draw()
+      end
+    elseif res.code ~= "stale" and not opts.quiet then
       self.load_error = res.message or "刷新失败"
+      self:draw()
     end
-    self:draw()
     if opts.after then
       pcall(opts.after, self)
     end
-    if self.opts.on_updated then
+    if self.opts.on_updated and changed and (res.ok or not opts.quiet) then
       pcall(self.opts.on_updated, self, self.source and self.source.snapshot)
     end
     if opts.then_sync and not self.closed and (res.ok or res.code == "no_cache" or res.no_cache) then
@@ -593,6 +625,78 @@ end
 
 function Board:sync()
   return self:refresh({ sync = true })
+end
+
+--- Directory holding the local loop cache files.
+function Board:_watch_dir()
+  local dir = self.opts and self.opts.loop_root
+  if not dir and self.config then
+    dir = self.config.loop_root_hint
+  end
+  if not dir then
+    dir = vim.fs.joinpath(self.root, ".pi", "loop-kit")
+  end
+  return dir
+end
+
+--- Start polling the local loop cache for background changes.
+function Board:_start_watch()
+  if self.closed or self._watch or self.watch == false then
+    return
+  end
+  local dir = self:_watch_dir()
+  if not dir or vim.fn.isdirectory(dir) ~= 1 then
+    return
+  end
+  local ok, watcher = pcall(function()
+    return watch_mod.new({
+      paths = watch_mod.files(dir),
+      interval = self.watch_interval,
+      on_change = function()
+        self:_watch_changed()
+      end,
+    })
+  end)
+  if ok then
+    self._watch = watcher
+  end
+end
+
+function Board:_stop_watch()
+  local watcher = self._watch
+  self._watch = nil
+  if watcher then
+    pcall(function()
+      watcher:stop()
+    end)
+  end
+end
+
+--- A watched cache file changed: reload quietly, keeping the old snapshot on failure.
+function Board:_watch_changed()
+  if self.closed or self.editing or self.syncing then
+    return
+  end
+  if self.state and self.state:is_writing() then
+    return
+  end
+  self:refresh({ no_sync = true, quiet = true, skip_unchanged = true })
+end
+
+--- Neovim regained focus: re-read the cache and, for remote sources, sync in the background.
+function Board:_on_focus()
+  if self.closed or self.editing or self.syncing then
+    return
+  end
+  if not self.sync_on_focus or not self.source then
+    return
+  end
+  local now = vim.uv.now()
+  if self._focus_at and now - self._focus_at < 2000 then
+    return
+  end
+  self._focus_at = now
+  self:refresh({ no_sync = true, quiet = true, skip_unchanged = true, then_sync = true })
 end
 
 function Board:set_filter(filter)
@@ -1632,6 +1736,16 @@ function M.open(opts)
     return existing, false
   end
 
+  if opts.watch == nil then
+    opts.watch = M.config.watch
+  end
+  if opts.watch_interval == nil then
+    opts.watch_interval = M.config.watch_interval
+  end
+  if opts.sync_on_focus == nil then
+    opts.sync_on_focus = M.config.sync_on_focus
+  end
+
   next_id = next_id + 1
   local self = setmetatable({}, Board)
   self.id = next_id
@@ -1646,11 +1760,17 @@ function M.open(opts)
   self.editing = nil
   self.keys = merge_keys(DEFAULT_KEYS, M.config.keys, opts.keys)
   self.provider = opts.provider
+  self.watch = opts.watch
+  self.watch_interval = opts.watch_interval
+  self.sync_on_focus = opts.sync_on_focus
+  self._watch = nil
+  self._focus_at = nil
 
   self:_ensure_deps()
   self:_create_ui()
   self:_bind_keys()
   self:_register_autocmds()
+  self:_start_watch()
 
   active[root] = self
   self:draw()

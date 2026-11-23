@@ -108,7 +108,10 @@ open_doc、flow、private、touch、meta、decide、help、close。插件不写�
   require("loop-kit").setup({
     cli_path = nil,          -- 覆盖 loop-cli 路径
     project_root = nil,      -- 覆盖项目根
-    auto_sync = true,        -- 打开/刷新时后台完整同步（仅远端访问网络）
+    auto_sync = true,        -- 首次打开看板时后台完整同步（仅远端访问网络）
+    watch = true,            -- 监听本机 loop 数据文件自动刷新
+    watch_interval = 1000,   -- 文件轮询间隔（毫秒，最小 200）
+    sync_on_focus = true,    -- 切回 Neovim 时后台同步远端源
     list_width = 38,         -- 左窗宽度
     default_filter = "open", -- open/all/pending/doing/blocked/done
     sort = "id_desc",        -- id_desc/id_asc/closed_desc/closed_asc/status/title
@@ -124,6 +127,15 @@ open_doc、flow、private、touch、meta、decide、help、close。插件不写�
   require("loop-kit").setup({ keys = { q = false, ["<C-s>"] = "sync" } })
 <
 同一项目的写操作串行执行（FIFO）；写失败保留当前选中、筛选与编辑内容。
+
+看板打开后每 watch_interval 毫秒轮询 loopRoot 下的 LOOP.json、
+LOOP.remote.json 与 loop.meta.json：后台 loop 修改任务后列表与详情自动刷新，
+保留选中、光标与详情滚动位置；没有实际变化时不重绘；字段编辑、写操作或同步
+进行中跳过本次刷新。切回 Neovim（FocusGained）时先读缓存，再为远端源后台
+同步一次，每个看板 2 秒内最多触发一次。                *loop-kit-auto-refresh*
+
+watch 关闭文件轮询，sync_on_focus 关闭切回时的后台同步，watch_interval
+控制轮询间隔（毫秒，最小 200）。
 
 display_style = "card" 时任务列表改为四行卡片（组标题保留，卡片之间不留空行）： >text
   ╭─ #12 ─────────────── ◐ doing ─╮

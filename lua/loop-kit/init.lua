@@ -27,6 +27,9 @@ local function defaults()
     cli_path = nil,
     project_root = nil,
     auto_sync = true,
+    watch = true,
+    watch_interval = 1000,
+    sync_on_focus = true,
     list_width = 38,
     detail_width = 80,
     default_filter = "open",
@@ -74,6 +77,9 @@ function M.setup(opts)
     show_hint = M._config.show_hint,
     display_style = M._config.display_style,
     auto_sync = M._config.auto_sync,
+    watch = M._config.watch,
+    watch_interval = M._config.watch_interval,
+    sync_on_focus = M._config.sync_on_focus,
     icons = M._config.icons,
     keys = M._config.keys,
   })
@@ -95,6 +101,9 @@ function M.reset()
     show_hint = M._config.show_hint,
     display_style = M._config.display_style,
     auto_sync = M._config.auto_sync,
+    watch = M._config.watch,
+    watch_interval = M._config.watch_interval,
+    sync_on_focus = M._config.sync_on_focus,
     icons = M._config.icons,
     keys = M._config.keys,
   })
@@ -242,6 +251,16 @@ function M.open(opts)
   if opts.auto_sync == nil then
     opts.auto_sync = M._config.auto_sync
   end
+  if opts.watch == nil then
+    opts.watch = M._config.watch
+  end
+  if opts.watch_interval == nil then
+    opts.watch_interval = M._config.watch_interval
+  end
+  if opts.sync_on_focus == nil then
+    opts.sync_on_focus = M._config.sync_on_focus
+  end
+  opts.loop_root = opts.loop_root or (resolved and resolved.loop_root_hint)
   opts.on_action = opts.on_action or function(res)
     emit_action(root, res)
   end

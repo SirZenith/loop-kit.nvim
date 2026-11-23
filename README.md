@@ -73,7 +73,9 @@ Plug 'https://git.dispersion.cc/Dispersion/loop-kit.nvim.git'
 2. 先执行 `list --json --no-sync`，成功后立即渲染缓存；
 3. `auto_sync = true` 且源为远端时，后台执行一次完整 `list --json`；
 4. 远端还没有缓存时显示“尚无缓存，正在同步”的状态，不显示成空列表；
-5. 同步失败保留旧快照，并在 winbar 与通知里显示原因。
+5. 同步失败保留旧快照，并在 winbar 与通知里显示原因；
+6. 之后本机 loop 数据文件变化时约 1 秒内自动刷新列表与详情，切回 Neovim 时按需
+   后台同步远端（见「自动刷新」）。
 
 `:LoopKit` 会复用同一项目的已有看板，不会为同一项目开第二个 tab。
 
@@ -145,7 +147,10 @@ doing → pending → blocked → done 分组。详情窗里也可使用 `q`、`
 require("loop-kit").setup({
   cli_path = nil,          -- 覆盖 loop-cli 路径
   project_root = nil,      -- 覆盖项目根
-  auto_sync = true,        -- 打开/刷新时是否后台完整同步（仅远端源访问网络）
+  auto_sync = true,        -- 首次打开看板时是否后台完整同步（仅远端源访问网络）
+  watch = true,            -- 监听本机 loop 数据文件自动刷新
+  watch_interval = 1000,   -- 文件轮询间隔（毫秒，最小 200）
+  sync_on_focus = true,    -- 切回 Neovim 时后台同步远端源
   list_width = 38,         -- 左窗宽度
   detail_width = 80,       -- 详情卡片最大宽度（窗口更窄时收窄）
   default_filter = "open", -- open/all/pending/doing/blocked/done
@@ -177,6 +182,20 @@ require("loop-kit").setup({
 `claim`、`done`、`force_done`、`block`、`edit`、`add`、`remove`、`open_doc`、
 `flow`、`private`、`touch`、`meta`、`decide`、`help`、`close`。插件不写任何全局
 键位。
+
+### 自动刷新
+
+看板打开后会轮询本机 loop 数据文件（`LOOP.json`、`LOOP.remote.json`、
+`loop.meta.json`，位于配置的 `loopRoot` 下）：后台 loop 修改任务状态或元数据后，
+列表与详情会在大约 1 秒内自动更新，不需要按 `r` 或重新打开看板。
+
+- 刷新只读本机缓存、不联网；没有实际变化时不重绘，也不触发 `LoopKitUpdated`。
+- 保留当前选中、列表光标与详情滚动位置。
+- 字段编辑、写操作或同步进行中会跳过自动刷新，避免覆盖编辑缓冲或产生竞态。
+- 其它机器对远端任务的修改不会写本机缓存，因此切回 Neovim（`FocusGained`）时
+  会先读缓存，再为远端源在后台同步一次；每个看板 2 秒内最多触发一次。
+- `watch = false` 关闭文件监听，`sync_on_focus = false` 关闭切回时的后台同步，
+  `watch_interval` 控制轮询间隔。
 
 ### 显示样式
 

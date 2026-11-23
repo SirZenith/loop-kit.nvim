@@ -44,6 +44,7 @@ local function open_board(overrides)
     source = source,
     state = state,
     auto_sync = false,
+    watch = false,
     notify = function(message)
       notifications[#notifications + 1] = message
     end,

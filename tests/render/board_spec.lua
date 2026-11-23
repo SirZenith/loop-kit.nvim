@@ -49,6 +49,7 @@ local function open_board(overrides)
     source = source,
     state = state,
     auto_sync = false,
+    watch = false,
     auto_refresh = overrides.auto_refresh ~= false,
     keys = overrides.keys,
     show_winbar = overrides.show_winbar,
@@ -163,6 +164,7 @@ describe("ui.board: tab and window lifecycle", function()
       source = stub,
       state = state_mod.new():get(fake.root),
       auto_sync = false,
+      watch = false,
       auto_refresh = true,
       notify = function() end,
     })
