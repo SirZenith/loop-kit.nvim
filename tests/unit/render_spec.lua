@@ -707,6 +707,62 @@ describe("render.detail", function()
     falsy(table.concat(analysis.lines, "\n"):find("  - outstanding", 1, true))
   end)
 
+  it("wraps multi-line touch paths through the layout calculator", function()
+    local paths = {
+      "lua/with space/and more/x.lua",
+      "tests/unit/layout_spec.lua",
+    }
+    local out = render.detail(task("#4", "pending", { touch = paths }), { width = 40 })
+    local first = out.fields.touch
+    truthy(first, "touch field missing")
+    local meta = out.fields.meta
+    truthy(meta and meta > first, "touch rows must precede the meta field")
+
+    -- 执行信息 keys max out at "isPrivateDesc" (13): inner = 36, so key_col = 13
+    -- and value_col = 36 - 13 - 2 = 21, with the value starting at column 17.
+    local value_start, value_width = 17, 21
+    local pieces = {}
+    for line = first, meta - 1 do
+      eq(40, util.display_width(out.lines[line]), "every touch row fills the card")
+      local content = trim(slice_display(out.lines[line], value_start, value_width))
+      pieces[#pieces + 1] = content
+
+      local marks = {}
+      for _, range in ipairs(out.highlights) do
+        if range.line == line and range.hl_group == "LoopKitDetailPath" then
+          marks[#marks + 1] = out.lines[line]:sub(range.col_start + 1, range.col_end)
+        end
+      end
+      eq(1, #marks, "every wrapped touch row carries one path highlight")
+      eq(content, marks[1], "path highlights must not cover padding spaces")
+    end
+    eq(table.concat(paths), table.concat(pieces))
+    eq("lua/with space/and mo", pieces[1], "wrapping must not drop spaces")
+    truthy(#pieces > #paths, "the long paths must wrap")
+  end)
+
+  it("keeps touch rows inside the card when a space lands on the wrap boundary", function()
+    local path = "lua/abcdefghijklmnop qrstuvwxyz0123456789a"
+    local out = render.detail(task("#4", "pending", { touch = { path } }), { width = 40 })
+    local first = out.fields.touch
+    local meta = out.fields.meta
+    truthy(first and meta and meta > first, "touch rows must precede the meta field")
+
+    local rows = 0
+    for line = first, meta - 1 do
+      eq(40, util.display_width(out.lines[line]), "wrapped touch row must fill the card")
+      local marks = 0
+      for _, range in ipairs(out.highlights) do
+        if range.line == line and range.hl_group == "LoopKitDetailPath" then
+          marks = marks + 1
+        end
+      end
+      eq(1, marks, "every wrapped touch row carries one path highlight")
+      rows = rows + 1
+    end
+    truthy(rows > 1, "the path must wrap")
+  end)
+
   it("renders blockedReason as a readonly section before the description", function()
     local reason = "需要确认接口\n第二行原因"
     local out = render.detail(task("#7", "blocked", {

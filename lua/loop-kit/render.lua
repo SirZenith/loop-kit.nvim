@@ -1,6 +1,7 @@
 -- Pure rendering: snapshot/state rows in, display lines and a stable
 -- line-number -> task id map out. No buffer or window access happens here.
 local util = require("loop-kit.util")
+local layout = require("loop-kit.layout")
 
 local M = {}
 
@@ -657,10 +658,11 @@ function M.detail(task, opts)
     cards[#cards + 1] = current_card
   end
 
-  local function field(key, segments, blocks)
+  local function field(key, segments, blocks, layout_spec)
     current_card.fields[#current_card.fields + 1] = {
       key = key,
       blocks = blocks or { segments or seg("") },
+      layout = layout_spec,
     }
   end
 
@@ -727,24 +729,31 @@ function M.detail(task, opts)
   field("flow", flow and seg(flow) or unset_seg())
 
   local touch = task.touch
-  local touch_blocks
+  local touch_lines
   if touch == nil or touch == vim.NIL then
-    touch_blocks = { unset_seg() }
+    field("touch", unset_seg())
   elseif type(touch) == "string" then
     if touch == "" then
-      touch_blocks = { unset_seg() }
+      field("touch", unset_seg())
     else
-      touch_blocks = { seg(one_line(touch), "LoopKitDetailPath") }
+      touch_lines = { one_line(touch) }
     end
   elseif type(touch) ~= "table" or #touch == 0 then
-    touch_blocks = { unset_seg() }
+    field("touch", unset_seg())
   else
-    touch_blocks = {}
+    touch_lines = {}
     for _, path in ipairs(touch) do
-      touch_blocks[#touch_blocks + 1] = seg(one_line(tostring(path)), "LoopKitDetailPath")
+      touch_lines[#touch_lines + 1] = one_line(tostring(path))
     end
   end
-  field("touch", nil, touch_blocks)
+  if touch_lines then
+    field("touch", nil, nil, {
+      lines = touch_lines,
+      align = "right",
+      shrink = true,
+      hl_group = "LoopKitDetailPath",
+    })
+  end
 
   field("meta", meta_segments(task) or unset_seg())
 
@@ -795,34 +804,65 @@ function M.detail(task, opts)
       local key_text = util.truncate_display(item.key, key_col)
       local key_cell = util.pad_display(key_text, key_col)
       local first_line = nil
-      for _, block in ipairs(item.blocks) do
-        for _, row in ipairs(wrap_segments(block, value_col)) do
-          local pieces = {}
-          for _, fragment in ipairs(row) do
-            pieces[#pieces + 1] = fragment.text
+
+      local function emit(value_part, pad, spans)
+        local right_align = first_line == nil
+        local left = right_align and key_cell or string.rep(" ", key_col)
+        local line = push("│ " .. left .. "  " .. pad .. value_part .. " │")
+        push_hl(line, 0, #"│ ", "LoopKitMuted")
+        local line_len = #(out.lines[line])
+        push_hl(line, line_len - #" │", line_len, "LoopKitMuted")
+        if right_align then
+          first_line = line
+          out.fields[item.key] = line
+          push_hl(line, #"│ ", #"│ " + #key_text, "LoopKitDetailKey")
+        end
+        local col = #"│ " + #left + 2 + #pad
+        for _, span in ipairs(spans) do
+          local text = span.text or ""
+          if span.hl_group and text ~= "" then
+            push_hl(line, col + span.offset, col + span.offset + #text, span.hl_group)
           end
-          local value_text = table.concat(pieces)
-          local padding = math.max(0, value_col - util.display_width(value_text))
-          local right_align = first_line == nil
-          local left = right_align and key_cell or string.rep(" ", key_col)
-          local pad = right_align and string.rep(" ", padding) or ""
-          local value_part = right_align and value_text or util.pad_display(value_text, value_col)
-          local line = push("│ " .. left .. "  " .. pad .. value_part .. " │")
-          push_hl(line, 0, #"│ ", "LoopKitMuted")
-          local line_len = #(out.lines[line])
-          push_hl(line, line_len - #" │", line_len, "LoopKitMuted")
-          if right_align then
-            first_line = line
-            out.fields[item.key] = line
-            push_hl(line, #"│ ", #"│ " + #key_text, "LoopKitDetailKey")
-          end
-          local col = #"│ " + #left + 2 + #pad
-          for _, fragment in ipairs(row) do
-            local text = fragment.text or ""
-            if fragment.hl_group and text ~= "" then
-              push_hl(line, col, col + #text, fragment.hl_group)
+        end
+      end
+
+      if item.layout then
+        local rows, block_width = layout.compute(value_col, item.layout.lines or {}, {
+          align = item.layout.align,
+          shrink = item.layout.shrink,
+        })
+        local pad = string.rep(" ", math.max(0, value_col - block_width))
+        for _, row in ipairs(rows) do
+          local lead_spaces = row:match("^ *") or ""
+          local content = row:sub(#lead_spaces + 1):gsub(" +$", "")
+          emit(row, pad, {
+            { offset = #lead_spaces, text = content, hl_group = item.layout.hl_group },
+          })
+        end
+      else
+        for _, block in ipairs(item.blocks) do
+          for _, row in ipairs(wrap_segments(block, value_col)) do
+            local pieces = {}
+            for _, fragment in ipairs(row) do
+              pieces[#pieces + 1] = fragment.text
             end
-            col = col + #text
+            local value_text = table.concat(pieces)
+            local padding = math.max(0, value_col - util.display_width(value_text))
+            local right_align = first_line == nil
+            local pad = right_align and string.rep(" ", padding) or ""
+            local value_part = right_align and value_text or util.pad_display(value_text, value_col)
+            local spans = {}
+            local offset = 0
+            for _, fragment in ipairs(row) do
+              local text = fragment.text or ""
+              spans[#spans + 1] = {
+                offset = offset,
+                text = text,
+                hl_group = fragment.hl_group,
+              }
+              offset = offset + #text
+            end
+            emit(value_part, pad, spans)
           end
         end
       end
