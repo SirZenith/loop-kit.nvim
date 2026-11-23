@@ -295,6 +295,26 @@
     },
     "#24": {
       "hash": "1859a77"
+    },
+    "#25": {
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-23T11-06-16-card-display-style.md",
+      "hash": "d40bfaf",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/render.lua",
+        "lua/loop-kit/util.lua",
+        "lua/loop-kit/init.lua",
+        "lua/loop-kit/highlights.lua",
+        "lua/loop-kit/ui/list.lua",
+        "lua/loop-kit/ui/board.lua",
+        "README.md",
+        "doc/loop-kit.txt",
+        "tests/unit/util_spec.lua",
+        "tests/unit/render_spec.lua",
+        "tests/render/list_spec.lua",
+        "tests/render/board_spec.lua",
+        "tests/integration/public_spec.lua"
+      ]
     }
   }
 }
