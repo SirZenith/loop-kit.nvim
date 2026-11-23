@@ -126,12 +126,14 @@ Plug 'https://git.dispersion.cc/Dispersion/loop-kit.nvim.git'
 `id_desc → id_asc → closed_desc → closed_asc → status` 之间切换；`status` 模式按
 doing → pending → blocked → done 分组。详情窗里也可使用 `q`、`?`、`o`、`e`。
 
-详情窗开头的键值对按类型分为四组，组内连续排列：状态信息（`id`、`status`、
+详情窗开头的键值对按类型分为卡片，卡片顺序固定：状态信息（`id`、`status`、
 `tag`、`origin`、`openAt`、`closedAt`、`hash`）、依赖与文档（`deps`、`doc`、
 `docParent`）、提示词（`specPrompt`、`researchPrompt`、`codePrompt`、`verifyPrompt`、
-`docTaskSplitPrompt`）与执行信息（`flow`、`touch`、`meta`、`isPrivateDesc`）。组与组
-之间插入 Markdown 分隔线 `---`（前后各留一个空行）；第一组前与最后一组后不加分隔线，
-因此 decide/analysis 块开头仍只有单条 `---`，不出现连续分隔线。
+`docTaskSplitPrompt`）、执行信息（`flow`、`touch`、`meta`、`isPrivateDesc`）与决策
+说明（`decide`、`analysis`、`outstanding`、`eligible`、`blocked`、`stuck`，仅在 decide
+分析可用时出现）。卡片用 `╭─`/`╰` 圆角边框，最多 64 列（窗口更窄时收窄，最小
+20 列）；键名靠左、值靠右，超宽值按聊天气泡方式折行。卡片之间只留一个空行，不再
+输出 Markdown 分隔线 `---`。
 
 同一项目的写操作串行执行（FIFO）；切换筛选和只读刷新不会被写请求阻塞，但写完成前
 不会用旧列表覆盖成功响应。写失败保留当前选中、筛选与编辑内容。

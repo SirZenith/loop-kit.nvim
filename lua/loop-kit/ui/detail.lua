@@ -67,6 +67,8 @@ function M.new(opts)
   self.notify = opts.notify
   self.rendered = nil
   self.task = nil
+  self.width = opts.width
+  self.last = nil
 
   if opts.setup ~= false then
     vim.bo[self.buf].buftype = "nofile"
@@ -85,6 +87,7 @@ end
 --- `analysis` (from `list`/`decide`) appends a decide/analysis block when set.
 function Detail:render(task, tasks_by_id, analysis, tasks)
   self.task = task
+  self.last = { task = task, tasks_by_id = tasks_by_id, analysis = analysis, tasks = tasks }
   if not task then
     return self:placeholder(PLACEHOLDER)
   end
@@ -92,7 +95,14 @@ function Detail:render(task, tasks_by_id, analysis, tasks)
   if analysis and type(analysis) == "table" then
     explain = require("loop-kit.decide").explain(analysis, task, tasks or {})
   end
-  local rendered = render.detail(task, { tasks_by_id = tasks_by_id, analysis = explain })
+  local width = self.width
+  if valid_win(self.win) then
+    local ok, win_width = pcall(vim.api.nvim_win_get_width, self.win)
+    if ok then
+      width = win_width
+    end
+  end
+  local rendered = render.detail(task, { tasks_by_id = tasks_by_id, analysis = explain, width = width })
   if explain then
     rendered.analysis = explain
   end
@@ -103,6 +113,15 @@ function Detail:render(task, tasks_by_id, analysis, tasks)
   end
   apply_highlights(self.buf, rendered)
   return rendered
+end
+
+--- Re-render the last task at the current width (e.g. after a window resize).
+--- Returns the renderer result, or nil when there is nothing to redraw.
+function Detail:rerender()
+  if not self.last or not self.last.task then
+    return nil
+  end
+  return self:render(self.last.task, self.last.tasks_by_id, self.last.analysis, self.last.tasks)
 end
 
 function Detail:placeholder(text)

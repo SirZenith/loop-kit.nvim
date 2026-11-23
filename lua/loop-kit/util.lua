@@ -338,4 +338,15 @@ function M.pad_display(text, width)
   return text .. string.rep(" ", pad)
 end
 
+--- Pad `text` on the left with spaces up to `width` display columns (right align).
+function M.pad_left_display(text, width)
+  text = type(text) == "string" and text or ""
+  width = math.floor(tonumber(width) or 0)
+  local pad = width - M.display_width(text)
+  if pad <= 0 then
+    return text
+  end
+  return string.rep(" ", pad) .. text
+end
+
 return M

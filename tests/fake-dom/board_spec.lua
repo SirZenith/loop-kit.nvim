@@ -156,3 +156,30 @@ describe("board edit mode", function()
     eq(board.detail.rendered.fields.isPrivateDesc, vim.api.nvim_win_get_cursor(board.detail_win)[1])
   end)
 end)
+
+describe("detail resize", function()
+  it("rerenders card rows when the detail pane narrows", function()
+    local util = require("loop-kit.util")
+    local board = open_board()
+    if not board.detail.rendered then
+      -- The fake CLI fixture is a POSIX script; render directly when it cannot
+      -- be spawned so this test still covers the resize path.
+      board.detail:render(TASKS[1], {}, nil, vim.deepcopy(TASKS))
+    end
+    truthy(board.detail.rendered, "the detail pane must render before resizing")
+
+    pcall(vim.api.nvim_win_set_width, board.detail_win, 34)
+    board:_resize()
+    local actual = vim.api.nvim_win_get_width(board.detail_win)
+
+    local border
+    for _, line in ipairs(board.detail.rendered.lines) do
+      if line:find("╭─ ", 1, true) == 1 then
+        border = line
+        break
+      end
+    end
+    truthy(border, "a card border is rendered")
+    eq(math.min(64, math.max(20, actual)), util.display_width(border))
+  end)
+end)

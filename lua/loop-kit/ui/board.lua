@@ -326,6 +326,11 @@ function Board:_resize()
       self.list:draw()
     end
   end
+  if self.detail then
+    pcall(function()
+      self.detail:rerender()
+    end)
+  end
 end
 
 function Board:is_open()

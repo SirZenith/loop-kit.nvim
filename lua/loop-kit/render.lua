@@ -403,42 +403,135 @@ function M.list(groups, opts)
   return out
 end
 
---- Render the dependency list, annotating each known task with its status icon
---- (coloured by the status) and falling back to the bare id when the task is
---- missing. Returns the display text and 0-based byte ranges into it.
-local function deps_text(task, opts)
+local DETAIL_CARD_MAX_WIDTH = 64
+local DETAIL_CARD_MIN_WIDTH = 20
+local DETAIL_CARD_GAP = 2
+
+--- Split styled segments into rows of at most `width` display columns.
+-- Rows break on spaces once past half width, otherwise on character
+-- boundaries; every fragment keeps its source highlight group.
+local function wrap_segments(segments, width)
+  width = math.max(1, math.floor(tonumber(width) or 0))
+  local cells = {}
+  for _, segment in ipairs(segments or {}) do
+    local text = (segment.text or ""):gsub("[\r\n]+", " ")
+    local count = vim.fn.strchars(text)
+    for index = 0, count - 1 do
+      local char = vim.fn.strcharpart(text, index, 1)
+      cells[#cells + 1] = {
+        text = char,
+        width = util.display_width(char),
+        hl_group = segment.hl_group,
+      }
+    end
+  end
+
+  local function merge(row)
+    local merged = {}
+    for _, cell in ipairs(row) do
+      local last = merged[#merged]
+      if last and last.hl_group == cell.hl_group then
+        last.text = last.text .. cell.text
+      else
+        merged[#merged + 1] = { text = cell.text, hl_group = cell.hl_group }
+      end
+    end
+    return merged
+  end
+
+  local function row_width(list, count)
+    local total = 0
+    for index = 1, count or #list do
+      total = total + list[index].width
+    end
+    return total
+  end
+
+  local rows, row, used = {}, {}, 0
+  local function flush()
+    while #row > 0 and row[#row].text == " " do
+      table.remove(row)
+    end
+    rows[#rows + 1] = merge(row)
+    row, used = {}, 0
+  end
+
+  for _, cell in ipairs(cells) do
+    if cell.width == 0 then
+      if #row > 0 then
+        row[#row].text = row[#row].text .. cell.text
+      else
+        row[#row + 1] = cell
+      end
+    elseif used + cell.width > width then
+      local space
+      for index = #row, 1, -1 do
+        if row[index].text == " " then
+          space = index
+          break
+        end
+      end
+      if space and space > 1 and row_width(row, space - 1) > width / 2 then
+        local tail = {}
+        for index = space + 1, #row do
+          tail[#tail + 1] = row[index]
+        end
+        local head = {}
+        for index = 1, space - 1 do
+          head[#head + 1] = row[index]
+        end
+        row = head
+        flush()
+        row, used = tail, row_width(tail)
+        if used + cell.width > width and used > 0 then
+          flush()
+        end
+      else
+        flush()
+      end
+      row[#row + 1] = cell
+      used = used + cell.width
+    else
+      row[#row + 1] = cell
+      used = used + cell.width
+    end
+  end
+  flush()
+  if #rows == 0 then
+    rows[1] = {}
+  end
+  return rows
+end
+
+--- Dependency segments: ids keep their own highlight, status icons use the
+--- status colour, and missing tasks fall back to the bare id.
+local function deps_segments(task, opts)
   local deps = task.deps
   if deps == nil or deps == vim.NIL or type(deps) ~= "table" or #deps == 0 then
-    return "(none)", {}
+    return { { text = "(none)" } }
   end
 
   local icons = vim.tbl_extend("force", M.icons, opts.icons or {})
-  local parts = {}
-  local ranges = {}
-  local col = 0
+  local segments = {}
   for index, dep in ipairs(deps) do
     local id = util.normalize_id(dep) or one_line(tostring(dep))
+    segments[#segments + 1] = { text = id, hl_group = "LoopKitDetailId" }
     local by_id = opts.tasks_by_id
     local dep_task = by_id and (by_id[id] or by_id[dep])
     local status = dep_task and dep_task.status
-    local value = id
     if type(status) == "string" and status ~= "" then
       status = status:lower()
-      local icon = icons[status] or "?"
-      value = id .. " " .. icon
-      ranges[#ranges + 1] = {
-        col_start = col + #id + 1,
-        col_end = col + #id + 1 + #icon,
+      segments[#segments + 1] = { text = " " }
+      segments[#segments + 1] = {
+        text = icons[status] or "?",
         hl_group = status_hl(status),
       }
     end
-    parts[#parts + 1] = value
-    col = col + #value
     if index < #deps then
-      col = col + #", "
+      segments[#segments + 1] = { text = ", " }
     end
   end
-  return table.concat(parts, ", "), ranges
+  return segments
 end
 
 local function flow_text(task)
@@ -527,38 +620,34 @@ function M.detail(task, opts)
     end
   end
 
-  local function field(key, value, value_hl)
-    local text = value == "" and string.format("- %s:", key) or string.format("- %s: %s", key, value)
-    local line = push(text)
-    out.fields[key] = line
-    push_hl(line, 0, 2, "LoopKitDetailKey")
-    push_hl(line, 2, 2 + #key, "LoopKitDetailKey")
-    if value_hl then
-      push_hl(line, 2 + #key + 2, #(out.lines[line]), value_hl)
-    end
-    return line
-  end
-
-  local function subfield(key, value, value_hl)
-    local line = push(string.format("  - %s: %s", key, value))
-    out.fields[key] = line
-    push_hl(line, 2, 4, "LoopKitDetailKey")
-    push_hl(line, 4, 4 + #key, "LoopKitDetailKey")
-    if value_hl then
-      push_hl(line, 6 + #key, #(out.lines[line]), value_hl)
-    end
-    return line
-  end
-
   local function is_unset(value)
     return value == nil or value == vim.NIL or value == ""
   end
 
+  local function seg(text, hl_group)
+    return { { text = text or "", hl_group = hl_group } }
+  end
+
+  local cards = {}
+  local current_card = nil
+
+  local function card(title)
+    current_card = { title = title, fields = {} }
+    cards[#cards + 1] = current_card
+  end
+
+  local function field(key, segments, blocks)
+    current_card.fields[#current_card.fields + 1] = {
+      key = key,
+      blocks = blocks or { segments or seg("") },
+    }
+  end
+
   local function path_field(key, value)
     if is_unset(value) then
-      return field(key, "(未设置)", "LoopKitDetailMuted")
+      return field(key, seg("(未设置)", "LoopKitDetailMuted"))
     end
-    return field(key, one_line(tostring(value)), "LoopKitDetailPath")
+    return field(key, seg(one_line(tostring(value)), "LoopKitDetailPath"))
   end
 
   local function section(key, heading)
@@ -579,97 +668,148 @@ function M.detail(task, opts)
     return line
   end
 
-  -- Key/value groups read better with a Markdown rule between them. The
-  -- title already separates the metadata from the heading, so no rule is
-  -- emitted before the first group or after the last one.
-  local function group_rule()
-    if #out.lines > 0 and out.lines[#out.lines] ~= "" then
-      push("")
-    end
-    push("---")
-    push("")
-  end
+  -- Metadata is grouped into cards; a blank line separates one card from the
+  -- next and the title above already separates the cards from the heading.
 
   local title = one_line(task.title)
   out.title_line = push("# " .. (title ~= "" and title or "(untitled)"))
   whole(out.title_line, "LoopKitDetailTitle")
   push("")
 
-  field("id", util.normalize_id(task.id) or format_value(task.id), "LoopKitDetailId")
+  card("状态信息")
+  field("id", seg(util.normalize_id(task.id) or format_value(task.id), "LoopKitDetailId"))
   local status = type(task.status) == "string" and task.status:lower() or ""
-  field("status", format_value(task.status), status ~= "" and status_hl(status) or "LoopKitDetailMuted")
-  field("tag", format_value(task.tag), "LoopKitDetailTag")
-  field("origin", format_value(task.origin))
-  field("openAt", format_value(task.openAt))
-  field("closedAt", format_value(task.closedAt))
-  field("hash", format_value(task.hash))
+  field("status", seg(format_value(task.status), status ~= "" and status_hl(status) or "LoopKitDetailMuted"))
+  field("tag", seg(format_value(task.tag), "LoopKitDetailTag"))
+  field("origin", seg(format_value(task.origin)))
+  field("openAt", seg(format_value(task.openAt)))
+  field("closedAt", seg(format_value(task.closedAt)))
+  field("hash", seg(format_value(task.hash)))
 
-  group_rule()
-  local deps_value, deps_ranges = deps_text(task, opts)
-  local deps_line = field("deps", deps_value)
-  local deps_value_col = 2 + #"deps" + 2
-  for _, range in ipairs(deps_ranges) do
-    push_hl(deps_line, deps_value_col + range.col_start, deps_value_col + range.col_end, range.hl_group)
-  end
+  card("依赖与文档")
+  field("deps", deps_segments(task, opts))
   path_field("doc", task.doc)
   path_field("docParent", task.docParent)
 
-  group_rule()
+  card("提示词")
   path_field("specPrompt", task.specPrompt)
   path_field("researchPrompt", task.researchPrompt)
   path_field("codePrompt", task.codePrompt)
   path_field("verifyPrompt", task.verifyPrompt)
   path_field("docTaskSplitPrompt", task.docTaskSplitPrompt)
 
-  group_rule()
+  card("执行信息")
   local flow = flow_text(task)
-  field("flow", flow or "(default)")
+  field("flow", seg(flow or "(default)"))
 
   local touch = task.touch
+  local touch_blocks
   if touch == nil or touch == vim.NIL then
-    field("touch", "unknown")
+    touch_blocks = { seg("unknown") }
   elseif type(touch) == "string" then
     if touch == "" then
-      field("touch", "(empty)")
+      touch_blocks = { seg("(empty)") }
     else
-      field("touch", one_line(touch), "LoopKitDetailPath")
+      touch_blocks = { seg(one_line(touch), "LoopKitDetailPath") }
     end
   elseif type(touch) ~= "table" or #touch == 0 then
-    field("touch", "(empty)")
+    touch_blocks = { seg("(empty)") }
   else
-    out.fields.touch = push("- touch:")
-    push_hl(out.fields.touch, 0, #"- touch:", "LoopKitDetailKey")
+    touch_blocks = {}
     for _, path in ipairs(touch) do
-      local line = push("  - " .. one_line(tostring(path)))
-      push_hl(line, 0, 4, "LoopKitDetailKey")
-      push_hl(line, 4, #(out.lines[line]), "LoopKitDetailPath")
+      touch_blocks[#touch_blocks + 1] = seg(one_line(tostring(path)), "LoopKitDetailPath")
     end
   end
+  field("touch", nil, touch_blocks)
 
-  field("meta", meta_text(task))
+  field("meta", seg(meta_text(task)))
 
   local private_desc = task.isPrivateDesc
   if private_desc == nil or private_desc == vim.NIL then
     private_desc = task.private
   end
   if private_desc == nil or private_desc == vim.NIL then
-    field("isPrivateDesc", "(unset)", "LoopKitDetailMuted")
+    field("isPrivateDesc", seg("(unset)", "LoopKitDetailMuted"))
   else
-    field("isPrivateDesc", private_desc == true and "true" or "false", "LoopKitDetailConstant")
+    field("isPrivateDesc", seg(private_desc == true and "true" or "false", "LoopKitDetailConstant"))
   end
 
   local analysis = opts.analysis
   if type(analysis) == "table" then
-    push("")
-    push("---")
-    push("")
-    field("decide", tostring(analysis.summary or ""))
-    field("analysis", "")
-    subfield("outstanding", tonumber(analysis.outstanding) or 0)
-    subfield("eligible", tostring(analysis.eligible == true), "LoopKitDetailConstant")
-    subfield("blocked", tostring(analysis.blocked == true), "LoopKitDetailConstant")
-    subfield("stuck", tostring(analysis.stuck == true), "LoopKitDetailConstant")
+    card("决策说明")
+    field("decide", seg(tostring(analysis.summary or "")))
+    field("analysis", seg(""))
+    field("outstanding", seg(tostring(tonumber(analysis.outstanding) or 0)))
+    field("eligible", seg(tostring(analysis.eligible == true), "LoopKitDetailConstant"))
+    field("blocked", seg(tostring(analysis.blocked == true), "LoopKitDetailConstant"))
+    field("stuck", seg(tostring(analysis.stuck == true), "LoopKitDetailConstant"))
   end
+
+  local width = tonumber(opts.width) or DETAIL_CARD_MAX_WIDTH
+  width = math.min(DETAIL_CARD_MAX_WIDTH, math.max(DETAIL_CARD_MIN_WIDTH, math.floor(width)))
+
+  local function render_card(spec)
+    local inner = width - 4
+    local key_width = 1
+    for _, item in ipairs(spec.fields) do
+      key_width = math.max(key_width, util.display_width(item.key))
+    end
+    local key_col = math.max(4, math.min(key_width, math.floor(inner * 0.45)))
+    local value_col = math.max(1, inner - key_col - DETAIL_CARD_GAP)
+
+    local title_text = util.truncate_display(spec.title, width - 5)
+    local fill = math.max(0, width - 5 - util.display_width(title_text))
+    local top_line = push("╭─ " .. title_text .. " " .. string.rep("─", fill) .. "╮")
+    local title_col = #"╭─ "
+    push_hl(top_line, 0, title_col, "LoopKitMuted")
+    push_hl(top_line, title_col, title_col + #title_text, "LoopKitDetailSection")
+    push_hl(top_line, title_col + #title_text, #(out.lines[top_line]), "LoopKitMuted")
+
+    for _, item in ipairs(spec.fields) do
+      local key_text = util.truncate_display(item.key, key_col)
+      local key_cell = util.pad_display(key_text, key_col)
+      local first_line = nil
+      for _, block in ipairs(item.blocks) do
+        for _, row in ipairs(wrap_segments(block, value_col)) do
+          local pieces = {}
+          for _, fragment in ipairs(row) do
+            pieces[#pieces + 1] = fragment.text
+          end
+          local value_text = table.concat(pieces)
+          local padding = math.max(0, value_col - util.display_width(value_text))
+          local right_align = first_line == nil
+          local left = right_align and key_cell or string.rep(" ", key_col)
+          local pad = right_align and string.rep(" ", padding) or ""
+          local value_part = right_align and value_text or util.pad_display(value_text, value_col)
+          local line = push("│ " .. left .. "  " .. pad .. value_part .. " │")
+          if right_align then
+            first_line = line
+            out.fields[item.key] = line
+            push_hl(line, #"│ ", #"│ " + #key_text, "LoopKitDetailKey")
+          end
+          local col = #"│ " + #left + 2 + #pad
+          for _, fragment in ipairs(row) do
+            local text = fragment.text or ""
+            if fragment.hl_group and text ~= "" then
+              push_hl(line, col, col + #text, fragment.hl_group)
+            end
+            col = col + #text
+          end
+        end
+      end
+    end
+
+    local bottom_line = push("╰" .. string.rep("─", width - 2) .. "╯")
+    whole(bottom_line, "LoopKitMuted")
+  end
+
+  for index, spec in ipairs(cards) do
+    if index > 1 then
+      push("")
+    end
+    render_card(spec)
+  end
+  push("")
 
   local blocked_reason = task.blockedReason
   if type(blocked_reason) == "string" and blocked_reason ~= "" then

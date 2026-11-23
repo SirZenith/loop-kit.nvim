@@ -21,6 +21,16 @@ local TASKS = {
     flow = "quick",
     touch = {},
   },
+  {
+    id = "#12",
+    title = "折行锚点",
+    status = "pending",
+    tag = "feature",
+    origin = "human",
+    desc = "长文档路径",
+    doc = "docs/nvim/2026-11-23T12-48-46-detail-kv-cards-with-an-extremely-long-name.md",
+    touch = { "lua/loop-kit/render.lua", "tests/render/detail_spec.lua" },
+  },
 }
 
 local function json(value)
@@ -426,5 +436,25 @@ describe("path field completion", function()
     eq(0, require("loop-kit.path_complete").omnifunc(1, nil))
 
     board.editing.handle:request_close()
+  end)
+end)
+
+describe("wrapped detail fields", function()
+  it("resolves continuation rows to their field anchors", function()
+    local board = open_board()
+    board:select("#12")
+    board:draw()
+    local rendered = board.detail.rendered
+    if not rendered then
+      -- The fake CLI fixture is a POSIX script; render the target directly
+      -- when it cannot be spawned so the anchors are still exercised.
+      rendered = board.detail:render(vim.deepcopy(TASKS[2]), {}, nil, vim.deepcopy(TASKS))
+    end
+    truthy(rendered)
+
+    local doc_line = rendered.fields.doc
+    truthy(doc_line)
+    eq("doc", edit.target_at(rendered, doc_line + 1).kind, "wrapped doc continuation")
+    eq("touch", edit.target_at(rendered, rendered.fields.touch + 1).kind, "second touch path")
   end)
 end)

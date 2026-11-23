@@ -97,8 +97,10 @@ describe("edit.target_at", function()
     eq({ kind = "isPrivateDesc" }, edit.target_at(rendered, fields.isPrivateDesc))
     truthy(fields.isPrivateDesc > fields.meta, "isPrivateDesc follows meta")
     eq({ kind = "touch" }, edit.target_at(rendered, fields.touch))
-    -- Child path lines belong to the touch field.
-    eq({ kind = "touch" }, edit.target_at(rendered, fields.touch + 1))
+    -- Continuation rows (additional touch paths) belong to the touch field.
+    local multi = make_task({ touch = { "lua/loop-kit/edit.lua", "tests/unit/edit_spec.lua" } })
+    local multi_rendered = render.detail(multi, { tasks_by_id = { [multi.id] = multi } })
+    eq({ kind = "touch" }, edit.target_at(multi_rendered, multi_rendered.fields.touch + 1))
   end)
 
   it("explains lifecycle-only lines", function()

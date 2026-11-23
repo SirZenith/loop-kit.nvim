@@ -370,6 +370,53 @@ describe("render.list card style", function()
 end)
 
 describe("render.detail", function()
+  local util = require("loop-kit.util")
+
+  local function card_bounds(out, title)
+    local start
+    for index, line in ipairs(out.lines) do
+      if line:sub(1, #"╭─ ") == "╭─ " and line:find(title, 1, true) then
+        start = index
+        break
+      end
+    end
+    truthy(start, "card " .. title .. " not found")
+    local stop = start
+    while stop < #out.lines and out.lines[stop]:find("╰", 1, true) == nil do
+      stop = stop + 1
+    end
+    return start, stop
+  end
+
+  local function card_titles(out)
+    local titles = {}
+    for _, line in ipairs(out.lines) do
+      local title = line:match("^╭─ ([^ ]+)")
+      if title then
+        titles[#titles + 1] = title
+      end
+    end
+    return titles
+  end
+
+  local function slice_display(text, start_col, width)
+    local pieces, col = {}, 0
+    local count = vim.fn.strchars(text)
+    for index = 0, count - 1 do
+      local char = vim.fn.strcharpart(text, index, 1)
+      local char_width = util.display_width(char)
+      if col >= start_col and col + char_width <= start_col + width then
+        pieces[#pieces + 1] = char
+      end
+      col = col + char_width
+    end
+    return table.concat(pieces)
+  end
+
+  local function trim(text)
+    return (text:gsub("^%s+", ""):gsub("%s+$", ""))
+  end
+
   it("renders deps and doc with explicit empty values", function()
     local out = render.detail(task("#7", "doing", {
       deps = { "#2", "#5" },
@@ -378,13 +425,13 @@ describe("render.detail", function()
     }))
 
     local rendered = table.concat(out.lines, "\n")
-    truthy(rendered:find("deps: #2, #5", 1, true), "deps missing")
-    truthy(rendered:find("doc: .pi/loop-kit/docs/nvim/plan.md", 1, true), "doc missing")
+    truthy(rendered:find("#2, #5", 1, true), "deps missing")
+    truthy(rendered:find(".pi/loop-kit/docs/nvim/plan.md", 1, true), "doc missing")
 
     local empty = render.detail(task("#8", "pending"))
     local text = table.concat(empty.lines, "\n")
-    match(text, "deps: %(none%)", "empty deps must be explicit")
-    match(text, "doc: %(未设置%)", "missing doc must be explicit")
+    match(text, "%(none%)", "empty deps must be explicit")
+    match(text, "%(未设置%)", "missing doc must be explicit")
   end)
 
   it("marks dependency status with icons and status colours", function()
@@ -400,7 +447,7 @@ describe("render.detail", function()
     })
 
     local line_no = out.fields.deps
-    eq("- deps: #2 ○, #3 ◐, #4 ●, #5 ✕, #9", out.lines[line_no])
+    truthy(out.lines[line_no]:find("#2 ○, #3 ◐, #4 ●, #5 ✕, #9", 1, true), out.lines[line_no])
     local text = table.concat(out.lines, "\n")
     falsy(text:find("(pending)", 1, true), "dep state text must not be rendered")
     falsy(text:find("(done)", 1, true), "dep state text must not be rendered")
@@ -419,14 +466,14 @@ describe("render.detail", function()
 
   it("distinguishes unknown touch from an empty touch array", function()
     local null_touch = render.detail(task("#1", "pending", { touch = vim.NIL }))
-    match(table.concat(null_touch.lines, "\n"), "touch: unknown")
+    match(table.concat(null_touch.lines, "\n"), "touch%s+unknown")
 
     local missing_touch = render.detail(task("#2", "pending"))
-    match(table.concat(missing_touch.lines, "\n"), "touch: unknown")
+    match(table.concat(missing_touch.lines, "\n"), "touch%s+unknown")
 
     local empty_touch = render.detail(task("#3", "pending", { touch = {} }))
     local empty_text = table.concat(empty_touch.lines, "\n")
-    match(empty_text, "touch: %(empty%)")
+    match(empty_text, "touch%s+%(empty%)")
     falsy(empty_text:find("unknown", 1, true), "empty array must not read as unknown")
 
     local paths = render.detail(task("#4", "pending", { touch = { "lua/**", "tests/*.lua" } }))
@@ -455,9 +502,9 @@ describe("render.detail", function()
   it("applies defaults for flow, isPrivateDesc and meta fields", function()
     local out = render.detail(task("#5", "doing"))
     local text = table.concat(out.lines, "\n")
-    match(text, "flow: %(default%)")
-    match(text, "meta: %(unset%)")
-    match(text, "isPrivateDesc: %(unset%)")
+    truthy(text:find("flow", 1, true))
+    truthy(text:find("(default)", 1, true))
+    truthy(text:find("(unset)", 1, true))
     truthy(out.fields.isPrivateDesc > out.fields.meta, "isPrivateDesc must follow meta")
 
     local with_fields = render.detail(task("#6", "doing", {
@@ -466,9 +513,9 @@ describe("render.detail", function()
       meta = { branch = "main", baseSha = "abc123" },
     }))
     local fields_text = table.concat(with_fields.lines, "\n")
-    match(fields_text, "flow: research > spec > commit")
-    match(fields_text, "isPrivateDesc: false")
-    match(fields_text, "meta: branch=main baseSha=abc123")
+    truthy(fields_text:find("research > spec > commit", 1, true))
+    truthy(with_fields.lines[with_fields.fields.isPrivateDesc]:find("false", 1, true))
+    truthy(fields_text:find("branch=main baseSha=abc123", 1, true))
     truthy(with_fields.fields.isPrivateDesc > with_fields.fields.meta)
   end)
 
@@ -505,7 +552,7 @@ describe("render.detail", function()
     eq("LoopKitDetailMuted", hl)
   end)
 
-  it("groups key/value fields and separates groups with rules", function()
+  it("draws grouped cards without rules, separated by a single blank line", function()
     local out = render.detail(task("#7", "doing", {
       deps = { "#2" },
       doc = "docs/plan.md",
@@ -515,56 +562,149 @@ describe("render.detail", function()
       codePrompt = "prompts/code.md",
       verifyPrompt = "prompts/verify.md",
       docTaskSplitPrompt = "prompts/split.md",
-    }))
+    }), { analysis = { summary = "ok", outstanding = 0, eligible = {}, blocked = {}, stuck = {} } })
     local lines = out.lines
     local f = out.fields
 
-    -- No rule before the first group: title, blank, then id.
-    eq(3, f.id)
+    -- No rule before the first group: title, blank, then the first card border.
+    eq(4, f.id)
     eq("", lines[2])
+    eq({ "状态信息", "依赖与文档", "提示词", "执行信息", "决策说明" }, card_titles(out))
+    falsy(table.concat(lines, "\n"):find("---", 1, true), "rules must be gone")
 
     local groups = {
       { "id", "status", "tag", "origin", "openAt", "closedAt", "hash" },
       { "deps", "doc", "docParent" },
       { "specPrompt", "researchPrompt", "codePrompt", "verifyPrompt", "docTaskSplitPrompt" },
+      { "flow", "touch", "meta", "isPrivateDesc" },
+      { "decide", "analysis", "outstanding", "eligible", "blocked", "stuck" },
     }
-    for _, group in ipairs(groups) do
-      for index = 2, #group do
-        eq(f[group[index - 1]] + 1, f[group[index]], group[index] .. " must stay inside its group")
+    local titles = { "状态信息", "依赖与文档", "提示词", "执行信息", "决策说明" }
+    local previous_stop
+    for index, group in ipairs(groups) do
+      local start, stop = card_bounds(out, titles[index])
+      if previous_stop then
+        eq(previous_stop + 2, start, "cards are separated by one blank line")
+      end
+      previous_stop = stop
+      for position = 2, #group do
+        eq(f[group[position - 1]] + 1, f[group[position]], group[position] .. " must stay inside its card")
       end
     end
 
-    -- Group 4 keeps the existing order: flow, touch, meta, isPrivateDesc.
-    truthy(f.flow < f.touch)
-    truthy(f.touch < f.meta)
-    eq(f.meta + 1, f.isPrivateDesc)
+    eq("", lines[previous_stop + 1])
+    eq("# 任务描述", lines[previous_stop + 2])
+  end)
 
-    -- Each group after the first starts after blank / --- / blank.
-    local boundaries = {
-      { f.hash, f.deps },
-      { f.docParent, f.specPrompt },
-      { f.docTaskSplitPrompt, f.flow },
-    }
-    for _, boundary in ipairs(boundaries) do
-      eq("", lines[boundary[1] + 1])
-      eq("---", lines[boundary[1] + 2])
-      eq("", lines[boundary[1] + 3])
-      eq(boundary[1] + 4, boundary[2])
+  it("clamps the card width to 64 columns and follows narrow panes", function()
+    local function border_width(pane)
+      local out = render.detail(task("#7", "doing"), { width = pane })
+      local line = out.lines[3]
+      truthy(line:find("╭", 1, true) == 1, "expected a card border")
+      return util.display_width(line)
     end
 
-    local rules = 0
-    for index, line in ipairs(lines) do
-      if line == "---" then
-        rules = rules + 1
-        eq("", lines[index - 1], "rule must be preceded by a blank line")
-        eq("", lines[index + 1], "rule must be followed by a blank line")
+    eq(64, border_width(120))
+    eq(50, border_width(50))
+    eq(30, border_width(30))
+    eq(20, border_width(10))
+    eq(64, util.display_width(render.detail(task("#7", "doing")).lines[3]))
+  end)
+
+  it("left-aligns keys and right-aligns single-line values", function()
+    local out = render.detail(task("#8", "doing", { hash = "abc123" }), { width = 50 })
+    local start, stop = card_bounds(out, "状态信息")
+    for line = start, stop do
+      eq(50, util.display_width(out.lines[line]), out.lines[line])
+    end
+    for line = start + 1, stop - 1 do
+      eq("│ ", vim.fn.strcharpart(out.lines[line], 0, 2))
+      eq("│", vim.fn.strcharpart(out.lines[line], vim.fn.strchars(out.lines[line]) - 1, 1))
+    end
+
+    local hash_line = out.lines[out.fields.hash]
+    eq("│ hash", vim.fn.strcharpart(hash_line, 0, 6))
+    truthy(hash_line:find("abc123 │", 1, true), "value must end one space before the border: " .. hash_line)
+  end)
+
+  it("wraps long values across rows without ellipsis or lost characters", function()
+    local doc = "文档/详情窗/键值对卡片分组/实现方案/这是一个很长的中文路径文档.md"
+    local out = render.detail(task("#9", "doing", { doc = doc }), { width = 40 })
+    local start, stop = card_bounds(out, "依赖与文档")
+    local value_start = 2 + 9 + 2 -- deps/doc/docParent share a 9-column key column
+    local value_width = (40 - 4) - 9 - 2
+    local doc_line = out.fields.doc
+    local next_anchor = out.fields.docParent
+    truthy(doc_line and next_anchor and next_anchor > doc_line)
+
+    local pieces = {}
+    for line = doc_line, next_anchor - 1 do
+      truthy(line >= start and line <= stop, "doc rows stay inside their card")
+      local slice = slice_display(out.lines[line], value_start, value_width)
+      falsy(slice:find("…", 1, true), "values must not be truncated")
+      pieces[#pieces + 1] = trim(slice)
+    end
+    eq(doc, table.concat(pieces))
+    truthy(#pieces > 1, "the long path must wrap")
+
+    local first_slice = slice_display(out.lines[doc_line], value_start, value_width)
+    truthy(first_slice:sub(1, 1) == " ", "first wrapped row is right aligned")
+    for line = doc_line + 1, next_anchor - 1 do
+      local slice = slice_display(out.lines[line], value_start, value_width)
+      truthy(slice:sub(1, 1) ~= " ", "continuation rows start at the value column")
+    end
+  end)
+
+  it("keeps dependency ids highlighted after wrapping", function()
+    local deps = {}
+    for index = 1, 20 do
+      deps[index] = "#" .. (100 + index)
+    end
+    local out = render.detail(task("#7", "doing", { deps = deps }), { width = 30 })
+    local start, stop = card_bounds(out, "依赖与文档")
+    local ids = {}
+    for _, range in ipairs(out.highlights) do
+      if range.line >= start and range.line <= stop and range.hl_group == "LoopKitDetailId" then
+        ids[#ids + 1] = out.lines[range.line]:sub(range.col_start + 1, range.col_end)
       end
     end
-    eq(3, rules, "only the three group boundaries carry a rule")
+    eq(20, #ids)
+    eq("#101", ids[1])
+    eq("#120", ids[#ids])
+  end)
 
-    -- The last group is not followed by an extra rule.
-    eq("", lines[f.isPrivateDesc + 1])
-    eq("# 任务描述", lines[f.isPrivateDesc + 2])
+  it("keeps path highlights and renders analysis as a card", function()
+    local unset = render.detail(task("#8", "pending"))
+    local doc_hl
+    for _, range in ipairs(unset.highlights) do
+      if range.line == unset.fields.doc then
+        doc_hl = range.hl_group
+      end
+    end
+    eq("LoopKitDetailMuted", doc_hl)
+    truthy(unset.lines[unset.fields.doc]:find("(未设置)", 1, true))
+
+    local touch = render.detail(task("#4", "pending", {
+      touch = { "lua/a.lua", "tests/b_spec.lua" },
+    }))
+    local first = touch.fields.touch
+    truthy(touch.lines[first]:find("lua/a.lua", 1, true))
+    truthy(touch.lines[first + 1]:find("tests/b_spec.lua", 1, true))
+    local path_marks = 0
+    for _, range in ipairs(touch.highlights) do
+      if range.hl_group == "LoopKitDetailPath" and range.line >= first and range.line <= first + 1 then
+        path_marks = path_marks + 1
+      end
+    end
+    eq(2, path_marks)
+
+    local analysis = render.detail(task("#8", "doing"), {
+      analysis = { summary = "ok", outstanding = 2, eligible = true, blocked = false, stuck = true },
+    })
+    truthy(analysis.fields.decide)
+    truthy(analysis.lines[analysis.fields.decide]:find("ok", 1, true))
+    truthy(analysis.lines[analysis.fields.outstanding]:find("2", 1, true))
+    falsy(table.concat(analysis.lines, "\n"):find("  - outstanding", 1, true))
   end)
 
   it("renders blockedReason as a readonly section before the description", function()
