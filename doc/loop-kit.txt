@@ -222,7 +222,9 @@ local 删除与远端移出：
 
 高亮组均以 default = true 定义并链接到内置组：LoopKitPending、LoopKitDoing、
 LoopKitDone、LoopKitBlocked、LoopKitId、LoopKitTitle、LoopKitTag、
-LoopKitMuted、LoopKitHeader、LoopKitError、LoopKitSelected，以及详情窗的
+LoopKitMuted、LoopKitHeader、LoopKitError、LoopKitSelected（任务列表选中行，
+链接 Visual）、LoopKitPickerSelected（多选界面选中标记，链接 CursorLineNr），
+以及详情窗的
 LoopKitDetailTitle、LoopKitDetailSection、LoopKitDetailKey、LoopKitDetailValue、
 LoopKitDetailPath、LoopKitDetailMuted、LoopKitDetailId、LoopKitDetailTag。
 打开看板时自动定义，无需调用 setup()。

@@ -350,7 +350,8 @@ describe("loop-kit highlights", function()
     LoopKitMuted = "Comment",
     LoopKitHeader = "Label",
     LoopKitError = "ErrorMsg",
-    LoopKitSelected = "Special",
+    LoopKitSelected = "Visual",
+    LoopKitPickerSelected = "CursorLineNr",
   }
 
   it("defines default-linked groups without shipping a colorscheme", function()

@@ -6,7 +6,7 @@ local M = {}
 local ns = vim.api.nvim_create_namespace("loop-kit-ui-picker")
 local MARK_SELECTED = "▣"
 local MARK_UNSELECTED = "▢"
-local SELECTED_HL = "LoopKitSelected"
+local SELECTED_HL = "LoopKitPickerSelected"
 
 --- Build a selection model.
 --- items: array of { value, label, selected } or bare values.

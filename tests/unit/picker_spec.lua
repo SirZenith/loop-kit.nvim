@@ -87,8 +87,8 @@ describe("picker.multi markers", function()
         highlighted[#highlighted + 1] = { line = mark[2], col = mark[3], hl_group = mark[4].hl_group }
       end
     end
-    eq({ { line = 0, col = 2, hl_group = "LoopKitSelected" },
-         { line = 2, col = 2, hl_group = "LoopKitSelected" } }, highlighted)
+    eq({ { line = 0, col = 2, hl_group = "LoopKitPickerSelected" },
+         { line = 2, col = 2, hl_group = "LoopKitPickerSelected" } }, highlighted)
     handle:close()
   end)
 

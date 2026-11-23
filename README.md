@@ -284,7 +284,9 @@ loop.reset()
 
 高亮组：`LoopKitPending`、`LoopKitDoing`、`LoopKitDone`、`LoopKitBlocked`、
 `LoopKitId`、`LoopKitTitle`、`LoopKitTag`、`LoopKitMuted`、`LoopKitHeader`、
-`LoopKitError`、`LoopKitSelected`，以及详情窗的 `LoopKitDetailTitle`、
+`LoopKitError`、`LoopKitSelected`（任务列表选中行，链接 `Visual`）、
+`LoopKitPickerSelected`（多选界面选中标记，链接 `CursorLineNr`），以及详情窗的
+`LoopKitDetailTitle`、
 `LoopKitDetailSection`、`LoopKitDetailKey`、`LoopKitDetailValue`、`LoopKitDetailPath`、
 `LoopKitDetailMuted`、`LoopKitDetailId`、`LoopKitDetailTag`。
 它们默认链接到 `Comment`、`Identifier`、`Title`、`Special`、`String`、`Visual` 等
