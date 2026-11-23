@@ -35,6 +35,7 @@ local function make_detail(overrides)
     win = overrides.win,
     width = overrides.width,
     max_width = overrides.max_width,
+    icons = overrides.icons,
     opener = overrides.opener,
     notify = function(message)
       notifications[#notifications + 1] = message
@@ -96,7 +97,7 @@ describe("ui.detail: readonly markdown view", function()
     truthy(card_start(lines, "提示词"))
     truthy(card_start(lines, "执行信息"))
     eq(nil, line_with(lines, "---"), "no markdown rules remain")
-    truthy(text:find("#2 ●", 1, true), "dependency status icon missing")
+    truthy(text:find("● #2", 1, true), "dependency status icon missing before the id")
     truthy(text:find("spec > impl > commit", 1, true))
     truthy(text:find("lua/loop-kit/ui/detail.lua", 1, true))
     truthy(text:find("branch=main baseSha=abc123", 1, true))
@@ -207,7 +208,22 @@ describe("ui.detail: readonly markdown view", function()
     truthy(lines[rendered.fields.eligible]:find("false", 1, true))
     truthy(lines[rendered.fields.blocked]:find("true", 1, true))
     truthy(lines[rendered.fields.stuck]:find("false", 1, true))
+    for _, key in ipairs({ "outstanding", "eligible", "blocked", "stuck" }) do
+      truthy(
+        lines[rendered.fields[key]]:find("│  +" .. key),
+        "analysis sub-key " .. key .. " is indented under analysis"
+      )
+    end
     eq(false, vim.bo[buf].modifiable)
+  end)
+
+  it("uses configured icons for dependency status before the id", function()
+    local detail, buf = make_detail({ width = 50, icons = { done = "OK" } })
+    detail:render(TASK, { ["#2"] = DEP })
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local text = table.concat(lines, "\n")
+
+    truthy(text:find("OK #2", 1, true), "configured dependency icon missing before the id")
   end)
 
   it("colours card borders muted and titles as sections", function()

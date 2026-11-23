@@ -518,18 +518,18 @@ local function deps_segments(task, opts)
   local segments = {}
   for index, dep in ipairs(deps) do
     local id = util.normalize_id(dep) or one_line(tostring(dep))
-    segments[#segments + 1] = { text = id, hl_group = "LoopKitDetailId" }
     local by_id = opts.tasks_by_id
     local dep_task = by_id and (by_id[id] or by_id[dep])
     local status = dep_task and dep_task.status
     if type(status) == "string" and status ~= "" then
       status = status:lower()
-      segments[#segments + 1] = { text = " " }
       segments[#segments + 1] = {
         text = icons[status] or "?",
         hl_group = status_hl(status),
       }
+      segments[#segments + 1] = { text = " " }
     end
+    segments[#segments + 1] = { text = id, hl_group = "LoopKitDetailId" }
     if index < #deps then
       segments[#segments + 1] = { text = ", " }
     end
@@ -772,10 +772,16 @@ function M.detail(task, opts)
     card("决策说明")
     field("decide", seg(tostring(analysis.summary or "")))
     field("analysis", seg(""))
-    field("outstanding", seg(tostring(tonumber(analysis.outstanding) or 0)))
-    field("eligible", seg(tostring(analysis.eligible == true), "LoopKitDetailConstant"))
-    field("blocked", seg(tostring(analysis.blocked == true), "LoopKitDetailConstant"))
-    field("stuck", seg(tostring(analysis.stuck == true), "LoopKitDetailConstant"))
+    local sub = { indent = 2 }
+    field("outstanding", seg(tostring(tonumber(analysis.outstanding) or 0)), nil, sub)
+    field(
+      "eligible",
+      seg(tostring(analysis.eligible == true), "LoopKitDetailConstant"),
+      nil,
+      sub
+    )
+    field("blocked", seg(tostring(analysis.blocked == true), "LoopKitDetailConstant"), nil, sub)
+    field("stuck", seg(tostring(analysis.stuck == true), "LoopKitDetailConstant"), nil, sub)
   end
 
   local max_width = tonumber(opts.max_width) or DETAIL_CARD_MAX_WIDTH
@@ -787,7 +793,8 @@ function M.detail(task, opts)
     local inner = width - 4
     local key_width = 1
     for _, item in ipairs(spec.fields) do
-      key_width = math.max(key_width, util.display_width(item.key))
+      local indent = (item.layout and item.layout.indent) or 0
+      key_width = math.max(key_width, util.display_width(string.rep(" ", indent) .. item.key))
     end
     local key_col = math.max(4, math.min(key_width, math.floor(inner * 0.45)))
     local value_col = math.max(1, inner - key_col - DETAIL_CARD_GAP)
@@ -801,7 +808,8 @@ function M.detail(task, opts)
     push_hl(top_line, title_col + #title_text, #(out.lines[top_line]), "LoopKitMuted")
 
     for _, item in ipairs(spec.fields) do
-      local key_text = util.truncate_display(item.key, key_col)
+      local indent = (item.layout and item.layout.indent) or 0
+      local key_text = util.truncate_display(string.rep(" ", indent) .. item.key, key_col)
       local key_cell = util.pad_display(key_text, key_col)
       local first_line = nil
 
@@ -826,7 +834,7 @@ function M.detail(task, opts)
         end
       end
 
-      if item.layout then
+      if item.layout and item.layout.lines then
         local rows, block_width = layout.compute(value_col, item.layout.lines or {}, {
           align = item.layout.align,
           shrink = item.layout.shrink,

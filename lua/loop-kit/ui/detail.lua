@@ -56,7 +56,7 @@ local function apply_highlights(buf, rendered)
 end
 
 --- Create a detail pane.
---- opts: root, buf, win, opener(path), notify(message), width, max_width,
+--- opts: root, buf, win, opener(path), notify(message), width, max_width, icons,
 --- setup (default true).
 function M.new(opts)
   opts = opts or {}
@@ -70,6 +70,7 @@ function M.new(opts)
   self.task = nil
   self.width = opts.width
   self.max_width = opts.max_width
+  self.icons = opts.icons
   self.last = nil
 
   if opts.setup ~= false then
@@ -106,6 +107,7 @@ function Detail:render(task, tasks_by_id, analysis, tasks)
   end
   local rendered = render.detail(task, {
     tasks_by_id = tasks_by_id,
+    icons = self.icons,
     analysis = explain,
     width = width,
     max_width = self.max_width,

@@ -447,7 +447,7 @@ describe("render.detail", function()
     })
 
     local line_no = out.fields.deps
-    truthy(out.lines[line_no]:find("#2 ○, #3 ◐, #4 ●, #5 ✕, #9", 1, true), out.lines[line_no])
+    truthy(out.lines[line_no]:find("○ #2, ◐ #3, ● #4, ✕ #5, #9", 1, true), out.lines[line_no])
     local text = table.concat(out.lines, "\n")
     falsy(text:find("(pending)", 1, true), "dep state text must not be rendered")
     falsy(text:find("(done)", 1, true), "dep state text must not be rendered")

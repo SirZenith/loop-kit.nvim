@@ -248,6 +248,7 @@ function Board:_create_ui()
     buf = detail_buf,
     win = detail_win,
     max_width = tonumber(self.opts.detail_width or M.config.detail_width) or 80,
+    icons = self.opts.icons or M.config.icons,
     opener = self.opts.open_doc,
     notify = function(message)
       self:_notify(message)
