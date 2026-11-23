@@ -7,7 +7,10 @@ local M = {}
 local state = { buf = nil, win = nil, augroup = nil }
 
 M.KEY_LINES = {
-  { "j / k", "上下移动" },
+  { "j / k", "上下移动（数字前缀表示重复，如 3j）" },
+  { "gg / G", "跳到首个 / 最后一个任务" },
+  { "<C-u> / <C-d>", "向上 / 向下半页" },
+  { "<C-b> / <C-f>", "向上 / 向下一页" },
   { "<CR>", "跳到详情窗口" },
   { "/", "关键字筛选（id/title/tag/desc）" },
   { "<Esc>", "清除关键字" },

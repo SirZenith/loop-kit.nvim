@@ -358,3 +358,83 @@ describe("ui.board: help, keymaps and filtering", function()
     close_board(b)
   end)
 end)
+
+describe("ui.board: range navigation", function()
+  local function twenty_tasks()
+    local tasks = {}
+    for index = 1, 20 do
+      tasks[#tasks + 1] = {
+        id = "#" .. index,
+        title = "Task " .. index,
+        status = "pending",
+        tag = "feat",
+        desc = "task " .. index,
+      }
+    end
+    return tasks
+  end
+
+  it("binds the range keys and honours a j/k count", function()
+    local b, _, state = open_board({ auto_refresh = false })
+    state:set_filter("all")
+    state:set_tasks(twenty_tasks())
+    b.list:draw()
+
+    local lhs = key_lhs(b.list_buf)
+    for _, key in ipairs({ "gg", "G", "<C-U>", "<C-B>", "<C-D>", "<C-F>" }) do
+      truthy(lhs[key], "missing range key " .. key)
+    end
+
+    local ids = b.list:visible_ids()
+    eq(20, #ids)
+
+    vim.api.nvim_set_current_win(b.list_win)
+    vim.cmd("normal gg")
+    eq(ids[1], state:selected_id(), "gg selects the first task")
+
+    vim.cmd("normal G")
+    eq(ids[#ids], state:selected_id(), "G selects the last task")
+
+    vim.cmd("normal gg")
+    vim.cmd("normal 3j")
+    eq(ids[4], state:selected_id(), "3j moves three rows down")
+
+    vim.cmd("normal 2k")
+    eq(ids[2], state:selected_id(), "2k moves two rows up")
+
+    close_board(b)
+  end)
+
+  it("moves by half and full pages through the default keys", function()
+    local b, _, state = open_board({ auto_refresh = false })
+    state:set_filter("all")
+    state:set_tasks(twenty_tasks())
+    b.list:draw()
+
+    local ids = b.list:visible_ids()
+    local page = b.list:page_rows()
+    eq(
+      math.max(1, vim.api.nvim_win_get_height(b.list_win) - 2),
+      page,
+      "page size follows the list window height"
+    )
+    local half = math.max(1, math.floor(page / 2))
+
+    b:handle("gg")
+    eq(ids[1], state:selected_id())
+
+    b:handle("<C-d>")
+    eq(ids[1 + half], state:selected_id(), "<C-d> moves half a page down")
+
+    b:handle("<C-u>")
+    eq(ids[1], state:selected_id(), "<C-u> moves half a page up")
+
+    b:handle("<C-f>")
+    eq(ids[1 + page], state:selected_id(), "<C-f> moves a full page down")
+
+    b:handle("<C-b>")
+    eq(ids[1], state:selected_id(), "<C-b> moves a full page up")
+
+    close_board(b)
+  end)
+end)

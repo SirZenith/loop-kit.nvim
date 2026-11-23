@@ -99,7 +99,10 @@ Plug 'https://git.dispersion.cc/Dispersion/loop-kit.nvim.git'
 
 | 键位 | 行为 |
 | --- | --- |
-| `j` / `k`、`<Down>` / `<Up>` | 上下移动 |
+| `j` / `k`、`<Down>` / `<Up>` | 上下移动（数字前缀表示重复，如 `3j`） |
+| `gg` / `G` | 跳到首个 / 最后一个任务 |
+| `<C-u>` / `<C-d>` | 向上 / 向下半页 |
+| `<C-b>` / `<C-f>` | 向上 / 向下一页 |
 | `<CR>` | 聚焦当前任务的详情窗 |
 | `/` | 输入关键字（匹配 id/title/tag/desc，大小写不敏感） |
 | `<Esc>` | 清除关键字 |
@@ -163,7 +166,8 @@ require("loop-kit").setup({
 })
 ```
 
-可用动作名与默认键位表中的行为一致：`move_up`、`move_down`、`open_detail`、
+可用动作名与默认键位表中的行为一致：`move_up`、`move_down`、`move_first`、`move_last`、
+`move_half_up`、`move_half_down`、`move_page_up`、`move_page_down`、`open_detail`、
 `filter_prompt`、`clear_query`、`cycle_filter`、`filter_all`、`cycle_sort`、`refresh`、`sync`、
 `claim`、`done`、`force_done`、`block`、`edit`、`add`、`remove`、`open_doc`、
 `flow`、`private`、`touch`、`meta`、`decide`、`help`、`close`。插件不写任何全局

@@ -257,6 +257,52 @@ function List:move(delta)
   return id
 end
 
+--- Number of list rows covered by a full page: the window height without the
+--- two hint rows. Falls back to the editor height when the list has no window.
+function List:page_rows()
+  local height = 0
+  if valid_win(self.win) then
+    local ok, value = pcall(vim.api.nvim_win_get_height, self.win)
+    if ok then
+      height = value
+    end
+  end
+  if height <= 0 then
+    height = vim.o.lines
+  end
+  return math.max(1, height - 2)
+end
+
+--- Jump to the first visible task.
+function List:move_first()
+  local ids = self:visible_ids()
+  if #ids == 0 then
+    return nil
+  end
+  return self:move(-#ids)
+end
+
+--- Jump to the last visible task.
+function List:move_last()
+  local ids = self:visible_ids()
+  if #ids == 0 then
+    return nil
+  end
+  return self:move(#ids)
+end
+
+--- Move half a page up (-1) or down (1), clamped at both ends.
+function List:move_half_page(direction)
+  direction = (tonumber(direction) or 1) < 0 and -1 or 1
+  return self:move(direction * math.max(1, math.floor(self:page_rows() / 2)))
+end
+
+--- Move a full page up (-1) or down (1), clamped at both ends.
+function List:move_page(direction)
+  direction = (tonumber(direction) or 1) < 0 and -1 or 1
+  return self:move(direction * self:page_rows())
+end
+
 --- Select a task by id when it is visible; redraw and notify.
 function List:select_id(id)
   if not self.state:select(id) then

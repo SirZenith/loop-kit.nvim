@@ -58,7 +58,10 @@ plugin/loop-kit.lua 只注册 :LoopKit，不加载看板。setup() 可省略，�
 ==============================================================================
 4. 键位                                                            *loop-kit-keys*
 
-j k、<Down> 或 <Up>      上下移动
+j k、<Down> 或 <Up>      上下移动（数字前缀表示重复，如 3j）
+gg / G                  跳到首个 / 最后一个任务
+<C-u> / <C-d>           向上 / 向下半页
+<C-b> / <C-f>           向上 / 向下一页
 <CR>                    聚焦当前任务的详情窗
 /                       关键字筛选（匹配 id/title/tag/desc，大小写不敏感）
 <Esc>                   清除关键字
@@ -91,8 +94,10 @@ touch、meta、isPrivateDesc）。组内连续排列，组间插入 Markdown 分
 有单条 ---，不出现连续分隔线。
 
 所有键位可用 setup({ keys = ... }) 覆盖或设为 false 禁用；动作名与上表行为
-同名，例如 move_up、move_down、open_detail、filter_prompt、clear_query、cycle_filter、
-filter_all、refresh、sync、claim、done、force_done、block、edit、add、remove、
+同名，例如 move_up、move_down、move_first、move_last、move_half_up、
+move_half_down、move_page_up、move_page_down、open_detail、filter_prompt、
+clear_query、cycle_filter、filter_all、refresh、sync、claim、done、force_done、block、
+edit、add、remove、
 open_doc、flow、private、touch、meta、decide、help、close。插件不写全局键位。
 
 ==============================================================================

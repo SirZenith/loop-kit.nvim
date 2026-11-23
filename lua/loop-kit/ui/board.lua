@@ -21,13 +21,19 @@ local M = {}
 
 local OPEN_STATUS = { pending = true, doing = true, blocked = true }
 local FILTER_ORDER = { "open", "all", "pending", "doing", "blocked", "done" }
-local HINT = "j/k 移动 · <CR> 详情 · / 筛选 · s/A 筛选 · S 排序 · r/R 刷新 · o doc · ? 帮助 · q 关闭"
+local HINT = "j/k 移动 · gg/G 首尾 · <C-u>/<C-d> 半页 · <C-b>/<C-f> 整页 · <CR> 详情 · / 筛选 · s/A 筛选 · S 排序 · r/R 刷新 · o doc · ? 帮助 · q 关闭"
 
 local DEFAULT_KEYS = {
   j = "move_down",
   k = "move_up",
   ["<Down>"] = "move_down",
   ["<Up>"] = "move_up",
+  gg = "move_first",
+  G = "move_last",
+  ["<C-u>"] = "move_half_up",
+  ["<C-b>"] = "move_page_up",
+  ["<C-d>"] = "move_half_down",
+  ["<C-f>"] = "move_page_down",
   ["<CR>"] = "open_detail",
   ["/"] = "filter_prompt",
   ["<Esc>"] = "clear_query",
@@ -247,7 +253,7 @@ local function bind_action(self, buf, lhs, action)
     return
   end
   pcall(vim.keymap.set, "n", lhs, function()
-    self:handle(action)
+    self:handle(action, vim.v.count1)
   end, {
     buffer = buf,
     nowait = true,
@@ -1395,11 +1401,29 @@ function Board:_decide_now()
 end
 
 local ACTIONS = {
-  move_down = function(self)
-    self.list:move(1)
+  move_down = function(self, count)
+    self.list:move(math.max(1, tonumber(count) or 1))
   end,
-  move_up = function(self)
-    self.list:move(-1)
+  move_up = function(self, count)
+    self.list:move(-math.max(1, tonumber(count) or 1))
+  end,
+  move_first = function(self)
+    self.list:move_first()
+  end,
+  move_last = function(self)
+    self.list:move_last()
+  end,
+  move_half_up = function(self)
+    self.list:move_half_page(-1)
+  end,
+  move_half_down = function(self)
+    self.list:move_half_page(1)
+  end,
+  move_page_up = function(self)
+    self.list:move_page(-1)
+  end,
+  move_page_down = function(self)
+    self.list:move_page(1)
   end,
   open_detail = function(self)
     if valid_win(self.detail_win) then
@@ -1537,7 +1561,9 @@ local ACTIONS = {
 }
 
 --- Run an action name ("refresh", "close", ...) or a bound key ("q", "j").
-function Board:handle(action)
+--- `count` is the numeric prefix of a key mapping (defaults to 1) and only
+--- affects the movement actions.
+function Board:handle(action, count)
   if self.closed or action == nil or action == false then
     return
   end
@@ -1571,7 +1597,7 @@ function Board:handle(action)
 
   local handler = ACTIONS[name]
   if handler then
-    return handler(self)
+    return handler(self, count)
   end
 end
 
