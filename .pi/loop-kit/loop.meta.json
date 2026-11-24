@@ -372,6 +372,21 @@
     "#31": {
       "hash": "360bdc3",
       "userPrompt": "- analisys 字段的下属键在显示时带一些左侧缩进，用于表明其从属关系\n- 任务详情中展示 deps 字段任务状态的图标对齐任务列表中状态图标的行为，也读取配置\n  中用户提供的图标。并且将图标的位置改换到任务 ID 的左侧。"
+    },
+    "#32": {
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-24T12-40-44-unblock-action.md",
+      "hash": "6aea267",
+      "flow": "quick",
+      "touch": [
+        "lua/loop-kit/actions.lua",
+        "lua/loop-kit/ui/board.lua",
+        "lua/loop-kit/ui/help.lua",
+        "lua/loop-kit/init.lua",
+        "tests/fake-dom/actions_spec.lua",
+        "tests/render/board_spec.lua",
+        "README.md",
+        "doc/loop-kit.txt"
+      ]
     }
   }
 }
