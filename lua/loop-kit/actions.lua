@@ -478,6 +478,37 @@ function Actions:block(id, cb)
   end)
 end
 
+--- Move a blocked task back to pending (blocked → pending).
+function Actions:unblock(id, cb)
+  cb = cb or noop
+  id = util.normalize_id(id)
+  if not id then
+    self:_settle(self:_invalid("unblock", id), cb)
+    return
+  end
+
+  local task = nil
+  for _, item in ipairs(self.state.tasks) do
+    if item.id == id then
+      task = item
+      break
+    end
+  end
+  if not task then
+    self:_settle(self:_invalid("unblock", id, "未找到任务 " .. id), cb)
+    return
+  end
+  if task.status ~= "blocked" then
+    self:_settle(self:_invalid("unblock", id,
+      string.format("条目 %s 当前状态是 %s，不是 blocked", id, tostring(task.status))), cb)
+    return
+  end
+
+  self:_submit("unblock", id, "edit", { id, "--status", "pending" }, {}, function(res)
+    self:_settle(res, cb)
+  end)
+end
+
 --- Remove a local task or move a remote task out of the loop. Always asks
 --- first, with wording that matches the source kind.
 function Actions:remove(id, opts, cb)

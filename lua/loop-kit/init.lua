@@ -16,6 +16,7 @@ local SUBCOMMANDS = {
   "sync",
   "refresh",
   "remove",
+  "unblock",
   "decide",
   "paths",
   "health",
@@ -459,6 +460,31 @@ function M.remove(id, opts)
   return instance
 end
 
+--- Move a blocked task back to pending (blocked → pending, no confirmation).
+function M.unblock(id, opts)
+  if type(id) == "table" then
+    opts, id = id, id.id
+  end
+  opts = opts or {}
+  local instance = ensure_board(opts)
+  if not instance then
+    return nil
+  end
+  if id ~= nil and id ~= "" then
+    local normalized = util.normalize_id(id)
+    if not normalized then
+      notify("任务 id 不合法：" .. tostring(id))
+      return nil
+    end
+    if not instance:select(normalized) then
+      notify(string.format("未找到任务 %s（可能被当前筛选隐藏）", normalized))
+      return nil
+    end
+  end
+  instance:handle("unblock")
+  return instance
+end
+
 --- Ask the scheduler for the next action and select it when applicable.
 function M.decide(opts)
   local instance = ensure_board(opts)
@@ -549,6 +575,8 @@ function M.command(args, fargs)
     return M.refresh()
   elseif sub == "remove" then
     return M.remove(parts[2])
+  elseif sub == "unblock" then
+    return M.unblock(parts[2])
   elseif sub == "decide" then
     return M.decide()
   elseif sub == "paths" then

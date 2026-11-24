@@ -3,7 +3,7 @@
 在 Neovim 里浏览与操作 LOOP 任务的零依赖看板。插件只直接读取项目根目录的
 `loop.config.json` 用于发现项目与 CLI；任务数据的所有读取与写入都通过 `loop-cli`
 完成。打开一个独立的 tab，左侧是任务列表，右侧是只读 Markdown 详情，常用动作
-（claim/done/block、编辑、新增、移出循环、flow/private/touch/meta、decide）都有
+（claim/done/block/unblock、编辑、新增、移出循环、flow/private/touch/meta、decide）都有
 默认键位。
 
 - 零运行时依赖：只用 Neovim API，不需要 nui.nvim、telescope.nvim 或
@@ -90,6 +90,7 @@ Plug 'https://git.dispersion.cc/Dispersion/loop-kit.nvim.git'
 | `:LoopKit sync` | 完整执行 `loop-cli list`（远端源会访问网络） |
 | `:LoopKit refresh` | 只读取缓存/本地状态，不联网 |
 | `:LoopKit remove #12` | 确认后删除 local 任务或把远端任务移出循环 |
+| `:LoopKit unblock #12` | 把 blocked 任务直接改回 pending（不确认） |
 | `:LoopKit decide` | 请求 decide 推荐；有 next id 时选中，否则只显示原因 |
 | `:LoopKit paths` | 只读显示 `loop-cli paths` 的权威路径 |
 | `:LoopKit health` | 在分屏里显示与 `:checkhealth loop-kit` 相同的诊断结果 |
@@ -115,6 +116,7 @@ Plug 'https://git.dispersion.cc/Dispersion/loop-kit.nvim.git'
 | `d` | done（受依赖门禁约束） |
 | `D` | 确认后强制 done（显式追加 `--force`） |
 | `b` | 输入非空原因并 block |
+| `u` | 解除阻塞（blocked → pending，不确认） |
 | `e` | 编辑光标处的字段（标题/描述/提示词/阶段名） |
 | `a` | 新建任务（输入标题与分类 tag） |
 | `x` | 删除或移出当前任务（始终先确认） |
@@ -179,7 +181,7 @@ require("loop-kit").setup({
 可用动作名与默认键位表中的行为一致：`move_up`、`move_down`、`move_first`、`move_last`、
 `move_half_up`、`move_half_down`、`move_page_up`、`move_page_down`、`open_detail`、
 `filter_prompt`、`clear_query`、`cycle_filter`、`filter_all`、`cycle_sort`、`refresh`、`sync`、
-`claim`、`done`、`force_done`、`block`、`edit`、`add`、`remove`、`open_doc`、
+`claim`、`done`、`force_done`、`block`、`unblock`、`edit`、`add`、`remove`、`open_doc`、
 `flow`、`private`、`touch`、`meta`、`decide`、`help`、`close`。插件不写任何全局
 键位。
 
@@ -307,6 +309,7 @@ loop.get_task(id, root)  -- 任务副本
 loop.edit(id, opts)
 loop.add(opts)
 loop.remove(id, opts)
+loop.unblock(id, opts)
 loop.actions(root)       -- 该项目的动作控制器
 loop.decide(opts)
 loop.paths(opts, cb)

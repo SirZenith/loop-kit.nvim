@@ -47,6 +47,7 @@ local DEFAULT_KEYS = {
   d = "done",
   D = "force_done",
   b = "block",
+  u = "unblock",
   e = "edit",
   a = "add",
   x = "remove",
@@ -1616,6 +1617,14 @@ local ACTIONS = {
     local id = self:_selected_id()
     if id then
       self:_ensure_actions():block(id, function(res)
+        self:_after(res)
+      end)
+    end
+  end,
+  unblock = function(self)
+    local id = self:_selected_id()
+    if id then
+      self:_ensure_actions():unblock(id, function(res)
         self:_after(res)
       end)
     end

@@ -223,7 +223,7 @@ describe("ui.board: help, keymaps and filtering", function()
   it("binds every default key locally and honours setup overrides", function()
     local b = open_board()
     local lhs = key_lhs(b.list_buf)
-    for _, key in ipairs({ "j", "k", "<CR>", "/", "s", "S", "A", "r", "R", "c", "d", "D", "b", "e", "a", "x", "o", "F", "P", "T", "M", "n", "?", "q" }) do
+    for _, key in ipairs({ "j", "k", "<CR>", "/", "s", "S", "A", "r", "R", "c", "d", "D", "b", "u", "e", "a", "x", "o", "F", "P", "T", "M", "n", "?", "q" }) do
       truthy(lhs[key], "missing default key " .. key)
     end
     close_board(b)

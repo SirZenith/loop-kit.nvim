@@ -158,6 +158,125 @@ describe("actions exact argv", function()
   end)
 end)
 
+describe("actions unblock", function()
+  it("moves a blocked task back to pending with edit --status", function()
+    local f, source, st, act = harness()
+    seed(source, st, { task("#12", "blocked"), task("#13", "pending") })
+    st:select("#12")
+    f:respond("edit", { stdout = json(task("#12", "pending")) })
+    f:respond("list", {
+      stdout = json({
+        source = { kind = "local" },
+        tasks = { task("#12", "pending"), task("#13", "pending") },
+        analysis = {},
+      }),
+    })
+
+    local res = await(function(cb)
+      act:unblock("#12", cb)
+    end)
+
+    truthy(res.ok, vim.inspect(res))
+    eq("unblock", res.action)
+    eq(full_argv(f, "edit", { "#12", "--status", "pending" }), f:call(1).argv)
+    eq(full_argv(f, "list", { "--no-sync" }), f:call(2).argv)
+    for _, arg in ipairs(f:call(1).argv) do
+      neq("--force", arg)
+    end
+    eq("pending", st:selected().status)
+    eq("#12", res.selected)
+  end)
+
+  it("refuses to unblock a task that is not blocked", function()
+    for _, status in ipairs({ "pending", "doing", "done" }) do
+      local f, source, st, act = harness()
+      seed(source, st, { task("#12", status) })
+      st:select("#12")
+
+      local res = await(function(cb)
+        act:unblock("#12", cb)
+      end)
+
+      falsy(res.ok, status .. ": " .. vim.inspect(res))
+      eq("invalid", res.code)
+      match(res.message or "", "不是 blocked")
+      eq(0, f:call_count())
+    end
+  end)
+
+  it("rejects an unknown id without spawning", function()
+    local f, source, st, act = harness()
+    seed(source, st, { task("#12", "blocked") })
+
+    local res = await(function(cb)
+      act:unblock("#99", cb)
+    end)
+
+    falsy(res.ok)
+    eq("invalid", res.code)
+    match(res.message or "", "未找到任务")
+    eq(0, f:call_count())
+  end)
+
+  it("reports a remote conflict without retrying", function()
+    local f, source, st, act = harness()
+    seed(source, st, { task("#12", "blocked") }, "gitea")
+    st:select("#12")
+    f:respond("edit", { stderr = "冲突：远端已被更新", exit = 4 })
+
+    local res = await(function(cb)
+      act:unblock("#12", cb)
+    end)
+
+    falsy(res.ok)
+    eq("conflict", res.code)
+    truthy(res.conflict)
+    match(res.message or "", "远端任务已更新：请同步后人工核对，不会自动重试。")
+    eq(1, f:call_count())
+    eq("#12", st:selected_id())
+    eq("blocked", st:selected().status)
+  end)
+
+  it("refreshes the board to pending after block then unblock", function()
+    local f, source, st, act = harness({ reason = "等待上游" })
+    seed(source, st, { task("#12", "pending") })
+    f:respond("block", { stdout = json(task("#12", "blocked", { blockedReason = "等待上游" })) })
+    f:respond("list", {
+      stdout = json({
+        source = { kind = "local" },
+        tasks = { task("#12", "blocked", { blockedReason = "等待上游" }) },
+        analysis = {},
+      }),
+    })
+
+    local blocked_res = await(function(cb)
+      act:block("#12", cb)
+    end)
+    truthy(blocked_res.ok, vim.inspect(blocked_res))
+    eq("blocked", st:selected().status)
+
+    f:respond("edit", { stdout = json(task("#12", "pending")) })
+    f:respond("list", {
+      stdout = json({
+        source = { kind = "local" },
+        tasks = { task("#12", "pending") },
+        analysis = {},
+      }),
+    })
+
+    local res = await(function(cb)
+      act:unblock("#12", cb)
+    end)
+
+    truthy(res.ok, vim.inspect(res))
+    eq(full_argv(f, "edit", { "#12", "--status", "pending" }), f:call(3).argv)
+    eq({ "#12" }, ids(st.tasks))
+    eq("pending", st.tasks[1].status)
+    eq("pending", st:selected().status)
+    eq("#12", st:selected_id())
+  end)
+end)
+
 describe("actions remove confirmation", function()
   it("does not spawn remove when the confirmation is declined", function()
     local f, source, st, act = harness({ answer = false })

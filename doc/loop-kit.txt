@@ -48,6 +48,7 @@ plugin/loop-kit.lua 只注册 :LoopKit，不加载看板。setup() 可省略，�
 :LoopKit sync            完整执行 loop-cli list（远端源会访问网络）。
 :LoopKit refresh         只读取缓存/本地状态，不联网。
 :LoopKit remove {id}     确认后删除 local 任务或把远端任务移出循环。
+:LoopKit unblock {id}    把 blocked 任务直接改回 pending（不确认）。
 :LoopKit decide          请求 decide 推荐；有 next id 时选中，否则显示原因。
 :LoopKit paths           只读显示 loop-cli paths 的权威路径。
 :LoopKit health          在分屏里显示 :checkhealth loop-kit 的结果。
@@ -72,6 +73,7 @@ c                       认领（claim）
 d                       完成（done，受依赖门禁约束）
 D                       确认后强制完成（显式追加 --force）
 b                       输入非空原因并 block
+u                       解除阻塞（blocked → pending，不确认）
 e                       编辑光标处的字段（标题/描述/提示词/阶段/tag/deps/doc/flow/写集）
 a                       新建任务（输入标题与分类 tag）
 :w / <Esc>              编辑中保存 / 放弃（normal 模式）
@@ -97,7 +99,7 @@ blocked、stuck，仅在 decide 分析可用时出现）。卡片用圆角边框
 所有键位可用 setup({ keys = ... }) 覆盖或设为 false 禁用；动作名与上表行为
 同名，例如 move_up、move_down、move_first、move_last、move_half_up、
 move_half_down、move_page_up、move_page_down、open_detail、filter_prompt、
-clear_query、cycle_filter、filter_all、refresh、sync、claim、done、force_done、block、
+clear_query、cycle_filter、filter_all、refresh、sync、claim、done、force_done、block、unblock、
 edit、add、remove、
 open_doc、flow、private、touch、meta、decide、help、close。插件不写全局键位。
 
@@ -231,6 +233,7 @@ local 删除与远端移出：
   loop.edit(id, opts)
   loop.add(opts)
   loop.remove(id, opts)
+  loop.unblock(id, opts)
   loop.actions(root)
   loop.decide(opts)
   loop.paths(opts, cb)
