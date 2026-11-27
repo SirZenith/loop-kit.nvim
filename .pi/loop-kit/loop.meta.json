@@ -390,6 +390,7 @@
     },
     "#33": {
       "doc": ".pi/loop-kit/docs/nvim/2026-11-27T10-48-39-loop-config-json-tags.md",
+      "hash": "f3a65c5",
       "touch": [
         "lua/loop-kit/kv.lua",
         "lua/loop-kit/edit.lua",
