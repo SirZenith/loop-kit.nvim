@@ -387,6 +387,23 @@
         "README.md",
         "doc/loop-kit.txt"
       ]
+    },
+    "#33": {
+      "doc": ".pi/loop-kit/docs/nvim/2026-11-27T10-48-39-loop-config-json-tags.md",
+      "touch": [
+        "lua/loop-kit/kv.lua",
+        "lua/loop-kit/edit.lua",
+        "lua/loop-kit/actions.lua",
+        "lua/loop-kit/ui/board.lua",
+        "tests/unit/kv_spec.lua",
+        "tests/unit/edit_spec.lua",
+        "tests/test-loop/.pi/loop-kit/schema/loop.config.schema.json",
+        ".pi/loop-kit/schema/loop.config.schema.json",
+        "loop.config.json",
+        ".pi/loop-kit/TARGETS.md",
+        "README.md",
+        "doc/loop-kit.txt"
+      ]
     }
   }
 }
