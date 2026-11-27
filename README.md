@@ -253,9 +253,11 @@ normal 模式 `<Esc>` / `<C-c>` 退出：干净时直接关闭，dirty 时询问
 - 删除发送 `--stage-prompt <stage>=`；改名发送
   `--stage-prompt-file <new>=-` 与 `--stage-prompt <old>=`。
 
-`a` 依次输入标题与分类 `tag`（默认 `feature`）。tag 必须属于
-`<loopRoot>/TARGETS.md` 的「任务分类（tag）」集合（解析失败回退
-`feature`/`bugfix`/`refactor`/`ux`/`visual`/`docs`/`chore`），然后执行
+`a` 依次输入标题与分类 `tag`（默认 `feature`）。生效 tag 集合按三级来源解析：
+`loop.config.json` 顶层 `tags`（对象数组，取 `name`；显式配置时为严格集合）→
+`<loopRoot>/TARGETS.md` 的「任务分类（tag）」小节 → 内置
+`feature`/`bugfix`/`refactor`/`ux`/`visual`/`docs`/`chore`。修改 config 或
+TARGETS.md 后立即生效，详情面板的 tag 选择器走同一条链。然后执行
 `add --title T --tag X --json`；任一步取消或 tag 非法都不调用 CLI。
 
 编辑只提交当前字段，不发送 `status`/`flow`/`touch`/`meta`；`isPrivateDesc`

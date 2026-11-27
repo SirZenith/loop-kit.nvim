@@ -1181,7 +1181,7 @@ end
 function Board:_edit_tag(task)
   local loop_root = self.config and self.config.loop_root_hint
   picker.select_one({
-    items = kv.tag_values(loop_root),
+    items = edit_ui.tag_list(self.root, loop_root),
     current = task.tag,
     prompt = "分类 tag",
     select = self.opts.select,

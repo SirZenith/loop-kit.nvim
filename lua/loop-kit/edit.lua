@@ -173,22 +173,41 @@ local function loop_root_dir(root, hint)
   return root .. "/.pi/loop-kit"
 end
 
---- Tag candidates from `<loopRoot>/TARGETS.md`; fall back to the builtins.
+local function file_stamp(path)
+  if type(path) ~= "string" then
+    return "missing"
+  end
+  local stat = vim.uv and vim.uv.fs_stat and vim.uv.fs_stat(path) or nil
+  if not stat then
+    return "missing"
+  end
+  return tostring(stat.mtime.sec) .. ":" .. tostring(stat.mtime.nsec)
+end
+
+--- Effective tag candidates: explicit `loop.config.json` `tags`, then
+--- `<loopRoot>/TARGETS.md`, then the builtins. The cache key is the config
+--- path and its stamp covers both files, so editing either one takes effect
+--- immediately.
 function M.tag_list(root, loop_root_hint)
   local dir = loop_root_dir(root, loop_root_hint)
-  if not dir then
+  local cfg_path = (type(root) == "string" and root ~= "") and (root .. "/loop.config.json") or nil
+  local targets_path = dir and (dir .. "/TARGETS.md") or nil
+  if not cfg_path and not dir then
     return M.DEFAULT_TAGS
   end
-  local path = dir .. "/TARGETS.md"
-  local stat = vim.uv and vim.uv.fs_stat and vim.uv.fs_stat(path) or nil
-  local stamp = stat and (tostring(stat.mtime.sec) .. ":" .. tostring(stat.mtime.nsec)) or "missing"
-  local cached = tag_cache[path]
+
+  local stamp = file_stamp(cfg_path) .. "|" .. file_stamp(targets_path)
+  local key = tostring(cfg_path or targets_path) .. "|" .. tostring(dir)
+  local cached = tag_cache[key]
   if cached and cached.stamp == stamp then
     return cached.tags
   end
 
-  local tags = kv.tag_values(dir)
-  tag_cache[path] = { stamp = stamp, tags = tags }
+  local tags = cfg_path and kv.config_tags(cfg_path) or nil
+  if not tags then
+    tags = kv.tag_values(dir)
+  end
+  tag_cache[key] = { stamp = stamp, tags = tags }
   return tags
 end
 

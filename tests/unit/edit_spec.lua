@@ -4,6 +4,8 @@ local render = require("loop-kit.render")
 local edit = require("loop-kit.edit")
 local actions_mod = require("loop-kit.actions")
 local state_mod = require("loop-kit.state")
+local kv = require("loop-kit.kv")
+local paths = require("helpers.paths")
 
 local function make_task(overrides)
   local task = {
@@ -271,5 +273,143 @@ describe("edit.tag_list", function()
     local fallback_root = vim.fn.tempname()
     truthy(edit.valid_tag(fallback_root, "feature"))
     falsy(edit.valid_tag(fallback_root, "custom"))
+  end)
+end)
+
+local function write_text(path, content)
+  vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
+  local fd = assert(io.open(path, "w"))
+  fd:write(content)
+  fd:close()
+end
+
+local function tags_json(names)
+  local entries = {}
+  for _, name in ipairs(names) do
+    entries[#entries + 1] = string.format('{"name":%q}', name)
+  end
+  return '{"version":1,"provider":"local","loopRoot":".loop","tags":['
+    .. table.concat(entries, ",")
+    .. "]}"
+end
+
+local function targets_md(names)
+  local lines = { "# 任务分类（tag）", "" }
+  for _, name in ipairs(names) do
+    lines[#lines + 1] = "- `" .. name .. "`"
+  end
+  return table.concat(lines, "\n") .. "\n"
+end
+
+describe("edit.tag_list sources", function()
+  it("prefers config tags over the TARGETS section", function()
+    local root = vim.fn.tempname()
+    write_text(root .. "/loop.config.json", tags_json({ "feature", "custom" }))
+    write_text(root .. "/.loop/TARGETS.md", targets_md({ "feature", "targets-only" }))
+    eq({ "feature", "custom" }, edit.tag_list(root))
+  end)
+
+  it("falls back to the TARGETS section when config tags are unusable", function()
+    local root = vim.fn.tempname()
+    write_text(root .. "/loop.config.json", '{"version":1,"loopRoot":".loop","tags":[]}')
+    write_text(root .. "/.loop/TARGETS.md", targets_md({ "feature", "custom" }))
+    eq({ "feature", "custom" }, edit.tag_list(root))
+  end)
+
+  it("falls back to builtins when neither source is usable", function()
+    local root = vim.fn.tempname()
+    eq(kv.FALLBACK_TAGS, edit.tag_list(root))
+  end)
+end)
+
+describe("edit.tag_list cache", function()
+  local base_sec = os.time() - 100
+
+  it("invalidates when loop.config.json changes", function()
+    local root = vim.fn.tempname()
+    local cfg = root .. "/loop.config.json"
+    write_text(cfg, tags_json({ "one" }))
+    write_text(root .. "/.loop/TARGETS.md", targets_md({ "target" }))
+    vim.uv.fs_utime(cfg, base_sec, base_sec)
+    eq({ "one" }, edit.tag_list(root))
+
+    write_text(cfg, tags_json({ "two" }))
+    vim.uv.fs_utime(cfg, base_sec, base_sec)
+    eq({ "one" }, edit.tag_list(root), "unchanged mtime keeps the cache")
+
+    vim.uv.fs_utime(cfg, base_sec + 5, base_sec + 5)
+    eq({ "two" }, edit.tag_list(root), "config change invalidates the cache")
+  end)
+
+  it("invalidates when TARGETS.md changes", function()
+    local root = vim.fn.tempname()
+    write_text(root .. "/loop.config.json", '{"version":1,"loopRoot":".loop"}')
+    local targets = root .. "/.loop/TARGETS.md"
+    write_text(targets, targets_md({ "alpha" }))
+    vim.uv.fs_utime(targets, base_sec, base_sec)
+    eq({ "alpha" }, edit.tag_list(root))
+
+    write_text(targets, targets_md({ "beta" }))
+    vim.uv.fs_utime(targets, base_sec, base_sec)
+    eq({ "alpha" }, edit.tag_list(root), "unchanged mtime keeps the cache")
+
+    vim.uv.fs_utime(targets, base_sec + 5, base_sec + 5)
+    eq({ "beta" }, edit.tag_list(root), "TARGETS change invalidates the cache")
+  end)
+end)
+
+describe("edit.valid_tag strictness", function()
+  it("only accepts members of the effective set", function()
+    local root = vim.fn.tempname()
+    write_text(root .. "/loop.config.json", tags_json({ "custom" }))
+    truthy(edit.valid_tag(root, "custom"))
+    falsy(edit.valid_tag(root, "feature"))
+
+    local fallback = vim.fn.tempname()
+    truthy(edit.valid_tag(fallback, "chore"))
+    falsy(edit.valid_tag(fallback, "custom"))
+  end)
+end)
+
+describe("board tag entry", function()
+  it("uses edit.tag_list instead of reading TARGETS directly", function()
+    local fd = assert(io.open(paths.root .. "/lua/loop-kit/ui/board.lua", "r"))
+    local source = fd:read("*a")
+    fd:close()
+
+    local start = source:find("function Board:_edit_tag", 1, true)
+    local stop = source:find("function Board:_edit_deps", 1, true)
+    truthy(start and stop and stop > start, "_edit_tag block should exist")
+
+    local body = source:sub(start, stop - 1)
+    falsy(body:find("kv.tag_values", 1, true), "tag picker must not bypass edit.tag_list")
+    truthy(body:find("edit_ui.tag_list", 1, true), "tag picker should call edit.tag_list")
+  end)
+end)
+
+describe("loop.config schema tags", function()
+  local function load(path)
+    local fd = assert(io.open(path, "r"))
+    local body = fd:read("*a")
+    fd:close()
+    return vim.json.decode(body)
+  end
+
+  local files = {
+    paths.root .. "/.pi/loop-kit/schema/loop.config.schema.json",
+    paths.root .. "/tests/test-loop/.pi/loop-kit/schema/loop.config.schema.json",
+  }
+
+  it("declares the tags shape identically in both copies", function()
+    local first = load(files[1]).properties.tags
+    truthy(first, "schema should declare properties.tags")
+    eq("array", first.type)
+    eq(1, first.minItems)
+    eq("object", first.items.type)
+    eq(false, first.items.additionalProperties)
+    eq({ "name" }, first.items.required)
+    eq("^[a-z0-9][a-z0-9-]*$", first.items.properties.name.pattern)
+    eq("string", first.items.properties.description.type)
+    eq(first, load(files[2]).properties.tags)
   end)
 end)

@@ -3,6 +3,15 @@
     "version": 1,
     "provider": "gitea",
     "loopRoot": ".pi/loop-kit",
+    "tags": [
+        { "name": "feature", "description": "新增功能" },
+        { "name": "bugfix", "description": "缺陷修复" },
+        { "name": "refactor", "description": "重构（含提取公共模式）" },
+        { "name": "ux", "description": "用户体验优化" },
+        { "name": "visual", "description": "视觉 / 样式调整" },
+        { "name": "docs", "description": "文档" },
+        { "name": "chore", "description": "构建、工具链、测试基础设施等杂项" }
+    ],
     "baseURL": "https://git.dispersion.cc/api/v1",
     "repo": "Dispersion/loop-kit.nvim",
     "tokenEnv": "GITEA_API_KEY",

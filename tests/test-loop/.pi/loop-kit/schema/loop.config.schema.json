@@ -141,6 +141,29 @@
       "$ref": "#/$defs/nonEmptyString",
       "description": "循环数据目录，相对本配置文件所在目录或绝对路径。"
     },
+    "tags": {
+      "description": "LOOP 条目 `tag` 的取值集合（对象数组，取 `name`）。显式配置时为严格集合：条目 tag 必须属于其中。缺省回退 `<loopRoot>/TARGETS.md` 的「任务分类（tag）」小节，再回退内置 7 项。",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "tag 名称；小写字母/数字/连字符，且以小写字母或数字开头。"
+          },
+          "description": {
+            "type": "string",
+            "description": "说明文字，仅供文档用途，不参与解析。"
+          }
+        }
+      }
+    },
     "filePath": {
       "$ref": "#/$defs/nonEmptyString",
       "description": "provider: local 时必填。任务文件路径，相对 loopRoot 或绝对路径。"
@@ -250,6 +273,9 @@
           "judge": {
             "$ref": "#/$defs/judge"
           },
+          "tags": {
+            "$ref": "#/properties/tags"
+          },
           "cliPath": {
             "$ref": "#/$defs/nonEmptyString",
             "description": "loop-cli 可执行文件路径，相对本配置文件所在目录或绝对路径（~ 不展开）。插件定位二进制时优先于 bin/ 与 PATH 探测，低于 LOOP_BIN。"
@@ -310,6 +336,9 @@
           "judge": {
             "$ref": "#/$defs/judge"
           },
+          "tags": {
+            "$ref": "#/properties/tags"
+          },
           "cliPath": {
             "$ref": "#/$defs/nonEmptyString",
             "description": "loop-cli 可执行文件路径，相对本配置文件所在目录或绝对路径（~ 不展开）。插件定位二进制时优先于 bin/ 与 PATH 探测，低于 LOOP_BIN。"
@@ -369,6 +398,9 @@
           },
           "judge": {
             "$ref": "#/$defs/judge"
+          },
+          "tags": {
+            "$ref": "#/properties/tags"
           },
           "cliPath": {
             "$ref": "#/$defs/nonEmptyString",
@@ -437,6 +469,9 @@
           "judge": {
             "$ref": "#/$defs/judge"
           },
+          "tags": {
+            "$ref": "#/properties/tags"
+          },
           "cliPath": {
             "$ref": "#/$defs/nonEmptyString",
             "description": "loop-cli 可执行文件路径，相对本配置文件所在目录或绝对路径（~ 不展开）。插件定位二进制时优先于 bin/ 与 PATH 探测，低于 LOOP_BIN。"
@@ -501,6 +536,9 @@
           },
           "judge": {
             "$ref": "#/$defs/judge"
+          },
+          "tags": {
+            "$ref": "#/properties/tags"
           },
           "cliPath": {
             "$ref": "#/$defs/nonEmptyString",

@@ -3,7 +3,7 @@ task_id: "#33"
 summary: "标签解析迁移：优先 loop.config.json 顶层 tags，回退 TARGETS.md 小节与内置 7 项；单一入口 + 双文件 mtime 缓存"
 module: nvim
 tag: refactor
-status: spec
+status: archived
 updated: 2026-11-27
 verification_levels: [unit]
 deferred_levels: []

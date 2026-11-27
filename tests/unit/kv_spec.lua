@@ -47,6 +47,63 @@ describe("kv.tag_values", function()
   end)
 end)
 
+describe("kv.config_tags", function()
+  local tmp = require("helpers.tmp")
+
+  local function write_config(body)
+    local dir = tmp.dir("kv-cfg-tags")
+    local path = dir .. "/loop.config.json"
+    tmp.write(path, body)
+    return path
+  end
+
+  it("returns the configured tag names", function()
+    local path = write_config([[
+{"version":1,"tags":[
+  {"name":"feature","description":"新增功能"},
+  {"name":"bugfix"}
+]}
+]])
+    eq({ "feature", "bugfix" }, kv.config_tags(path))
+  end)
+
+  it("returns nil when the file is missing", function()
+    local dir = tmp.dir("kv-cfg-tags-missing")
+    eq(nil, kv.config_tags(dir .. "/loop.config.json"))
+    eq(nil, kv.config_tags(nil))
+  end)
+
+  it("returns nil for malformed json", function()
+    eq(nil, kv.config_tags(write_config("{not json")))
+  end)
+
+  it("returns nil when tags is not a list", function()
+    eq(nil, kv.config_tags(write_config([[{"tags":{"name":"feature"}}]])))
+    eq(nil, kv.config_tags(write_config([[{"tags":"feature"}]])))
+  end)
+
+  it("returns nil for an empty tags array", function()
+    eq(nil, kv.config_tags(write_config([[{"tags":[]}]])))
+  end)
+
+  it("returns nil when an entry has no usable name", function()
+    eq(nil, kv.config_tags(write_config([[{"tags":[{"description":"x"}]}]])))
+    eq(nil, kv.config_tags(write_config([[{"tags":[{"name":1}]}]])))
+  end)
+
+  it("rejects names outside the kebab-case pattern", function()
+    for _, name in ipairs({ "Feature", "a_b", "-lead", "", "a.b" }) do
+      local path = write_config('{"tags":[{"name":"' .. name .. '"}]}')
+      eq(nil, kv.config_tags(path), name)
+    end
+  end)
+
+  it("accepts kebab-case names", function()
+    local path = write_config([[{"tags":[{"name":"a"},{"name":"a-b--c"}]}]])
+    eq({ "a", "a-b--c" }, kv.config_tags(path))
+  end)
+end)
+
 local function tasks()
   return {
     { id = "#1", title = "一", status = "done", deps = {} },

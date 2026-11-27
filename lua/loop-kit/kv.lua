@@ -80,6 +80,50 @@ function M.tag_values(loop_root)
   return vim.deepcopy(M.FALLBACK_TAGS)
 end
 
+--- Accepted tag names: kebab-case ASCII, same pattern as the upstream schema.
+local TAG_NAME_PATTERN = "^[a-z0-9][a-z0-9%-]*$"
+
+--- Read explicit tag names from a `loop.config.json` file.
+---
+--- Only a non-empty array of `{ name = "<kebab-case>" }` entries is
+--- accepted; `description` is documentation-only and ignored. Missing file,
+--- invalid JSON or an unusable shape all return nil so callers fall back to
+--- TARGETS.md and then the builtins.
+function M.config_tags(config_path)
+  if type(config_path) ~= "string" or config_path == "" then
+    return nil
+  end
+  local file = io.open(config_path, "r")
+  if not file then
+    return nil
+  end
+  local ok, content = pcall(file.read, file, "*a")
+  file:close()
+  if not ok or type(content) ~= "string" then
+    return nil
+  end
+  local decoded_ok, decoded = pcall(vim.json.decode, content)
+  if not decoded_ok or type(decoded) ~= "table" then
+    return nil
+  end
+  local entries = decoded.tags
+  if type(entries) ~= "table" or not vim.islist(entries) or #entries == 0 then
+    return nil
+  end
+  local names = {}
+  for _, entry in ipairs(entries) do
+    if type(entry) ~= "table" then
+      return nil
+    end
+    local name = entry.name
+    if type(name) ~= "string" or not name:match(TAG_NAME_PATTERN) then
+      return nil
+    end
+    names[#names + 1] = name
+  end
+  return names
+end
+
 --- Build `{ ["#1"] = { "#2" } }` from a task list.
 local function dep_map(tasks)
   local map = {}
